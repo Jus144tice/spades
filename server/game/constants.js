@@ -1,0 +1,21 @@
+export const SUITS = ['S', 'H', 'D', 'C'];
+export const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
+export const RANK_VALUE = {
+  '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
+  '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14,
+};
+
+export const SUIT_NAME = {
+  S: 'Spades',
+  H: 'Hearts',
+  D: 'Diamonds',
+  C: 'Clubs',
+};
+
+export const WINNING_SCORE = 500;
+export const BOOK_PENALTY_THRESHOLD = 10;
+export const BOOK_PENALTY = 100;
+export const NIL_BONUS = 100;
+export const TEN_TRICK_BONUS = 50;
+export const RECONNECT_TIMEOUT_MS = 60000;
