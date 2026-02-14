@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { useSocket } from './SocketContext.jsx';
 
 const GameContext = createContext(null);
+
+const TRICK_DISPLAY_DELAY = 1500; // ms to show completed trick before clearing
 
 const initialState = {
   screen: 'join',
@@ -27,6 +29,7 @@ const initialState = {
   gameOverData: null,
   roundSummary: null,
   lastTrickWinner: null,
+  trickWonPending: false,
   errorMessage: null,
 };
 
@@ -137,9 +140,18 @@ function gameReducer(state, action) {
     case 'TRICK_WON':
       return {
         ...state,
-        currentTrick: [],
+        // Keep currentTrick visible — CLEAR_TRICK will remove it after delay
         tricksTaken: action.data.tricksTaken,
         lastTrickWinner: action.data.winnerId,
+        trickWonPending: true,
+      };
+
+    case 'CLEAR_TRICK':
+      return {
+        ...state,
+        currentTrick: [],
+        lastTrickWinner: null,
+        trickWonPending: false,
       };
 
     case 'ROUND_SCORED':
@@ -210,6 +222,7 @@ function gameReducer(state, action) {
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const socket = useSocket();
+  const trickTimerRef = useRef(null);
 
   useEffect(() => {
     if (!socket) return;
@@ -224,7 +237,14 @@ export function GameProvider({ children }) {
       game_started: (data) => dispatch({ type: 'GAME_STARTED', data }),
       bid_placed: (data) => dispatch({ type: 'BID_PLACED', data }),
       card_played: (data) => dispatch({ type: 'CARD_PLAYED', data }),
-      trick_won: (data) => dispatch({ type: 'TRICK_WON', data }),
+      trick_won: (data) => {
+        dispatch({ type: 'TRICK_WON', data });
+        // Clear trick after delay so players can see the 4th card
+        if (trickTimerRef.current) clearTimeout(trickTimerRef.current);
+        trickTimerRef.current = setTimeout(() => {
+          dispatch({ type: 'CLEAR_TRICK' });
+        }, TRICK_DISPLAY_DELAY);
+      },
       round_scored: (data) => dispatch({ type: 'ROUND_SCORED', data }),
       new_round: (data) => dispatch({ type: 'NEW_ROUND', data }),
       game_over: (data) => dispatch({ type: 'GAME_OVER', data }),
@@ -240,6 +260,7 @@ export function GameProvider({ children }) {
       for (const [event, handler] of Object.entries(handlers)) {
         socket.off(event, handler);
       }
+      if (trickTimerRef.current) clearTimeout(trickTimerRef.current);
     };
   }, [socket]);
 

@@ -46,6 +46,7 @@ export default function GameScreen() {
             tricks={state.tricksTaken[partner?.id]}
             isCurrentTurn={state.currentTurnId === partner?.id}
             isDealer={state.players.indexOf(partner) === state.dealerIndex}
+            isLastTrickWinner={state.lastTrickWinner === partner?.id}
           />
         </div>
 
@@ -57,6 +58,7 @@ export default function GameScreen() {
             tricks={state.tricksTaken[leftOpp?.id]}
             isCurrentTurn={state.currentTurnId === leftOpp?.id}
             isDealer={state.players.indexOf(leftOpp) === state.dealerIndex}
+            isLastTrickWinner={state.lastTrickWinner === leftOpp?.id}
           />
         </div>
 
@@ -65,6 +67,7 @@ export default function GameScreen() {
           currentTrick={state.currentTrick}
           players={state.players}
           myIndex={myIndex}
+          lastTrickWinner={state.lastTrickWinner}
         />
 
         {/* Right opponent */}
@@ -75,6 +78,7 @@ export default function GameScreen() {
             tricks={state.tricksTaken[rightOpp?.id]}
             isCurrentTurn={state.currentTurnId === rightOpp?.id}
             isDealer={state.players.indexOf(rightOpp) === state.dealerIndex}
+            isLastTrickWinner={state.lastTrickWinner === rightOpp?.id}
           />
         </div>
 
@@ -87,6 +91,7 @@ export default function GameScreen() {
             isCurrentTurn={isMyTurn}
             isDealer={myIndex === state.dealerIndex}
             isMe
+            isLastTrickWinner={state.lastTrickWinner === me?.id}
           />
         </div>
       </div>
@@ -96,6 +101,13 @@ export default function GameScreen() {
       {state.phase === 'bidding' && !isMyTurn && (
         <div className="waiting-bid">
           Waiting for {state.players.find(p => p.id === state.currentTurnId)?.name} to bid...
+          {Object.keys(state.bids).length > 0 && (
+            <div className="bid-summary">
+              <span className="bid-summary-item">Total bid: <strong>{Object.values(state.bids).reduce((s, b) => s + b, 0)}</strong></span>
+              <span className="bid-summary-divider">|</span>
+              <span className="bid-summary-item">Remaining: <strong>{13 - Object.values(state.bids).reduce((s, b) => s + b, 0)}</strong></span>
+            </div>
+          )}
         </div>
       )}
 
