@@ -134,6 +134,7 @@ function gameReducer(state, action) {
         hand: newHand,
         currentTrick: [...state.currentTrick, { playerId: action.data.playerId, card: action.data.card }],
         currentTurnId: action.data.nextTurnId,
+        spadesBroken: state.spadesBroken || action.data.card.suit === 'S',
       };
     }
 
