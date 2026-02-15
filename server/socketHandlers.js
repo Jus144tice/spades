@@ -14,10 +14,12 @@ import {
 } from './lobby.js';
 import { GameState } from './game/GameState.js';
 import { botBid, botPlayCard } from './botAI.js';
+import pool from './db/index.js';
 
 // Delay range for bot actions (ms) - feels more natural
 const BOT_DELAY_MIN = 800;
 const BOT_DELAY_MAX = 2000;
+const TRICK_DISPLAY_DELAY = 1800; // must be >= client's TRICK_DISPLAY_DELAY
 
 function botDelay() {
   return BOT_DELAY_MIN + Math.random() * (BOT_DELAY_MAX - BOT_DELAY_MIN);
@@ -25,7 +27,7 @@ function botDelay() {
 
 export function registerHandlers(io, socket) {
   socket.on('create_lobby', ({ playerName }) => {
-    const lobby = createLobby(socket.id, playerName);
+    const lobby = createLobby(socket.id, playerName, socket.userId);
     socket.join(lobby.code);
     socket.emit('lobby_created', {
       lobbyCode: lobby.code,
@@ -36,7 +38,7 @@ export function registerHandlers(io, socket) {
   });
 
   socket.on('join_lobby', ({ playerName, lobbyCode }) => {
-    const result = joinLobby(socket.id, playerName, lobbyCode);
+    const result = joinLobby(socket.id, playerName, lobbyCode, socket.userId);
     if (result.error) {
       socket.emit('error_msg', { message: result.error });
       return;
@@ -319,6 +321,12 @@ function processCardPlay(io, lobbyCode, playerId, card) {
 
         const msg = addChatMessage(lobbyCode, null, `Game over! ${winTeamPlayers.join(' & ')} win!`);
         io.to(lobbyCode).emit('chat_message', msg);
+
+        // Save game results to database (fire-and-forget)
+        saveGameResults(lobby.game, result.winningTeam).catch(err => {
+          console.error('Failed to save game results:', err);
+        });
+
         return; // No more bot turns needed
       } else {
         lobby.game.startNewRound();
@@ -333,9 +341,16 @@ function processCardPlay(io, lobbyCode, playerId, card) {
         io.to(lobbyCode).emit('chat_message', msg);
       }
     }
+
+    // After a completed trick, wait for the display delay before next bot turn
+    // so the client can show all 4 cards before clearing
+    setTimeout(() => {
+      scheduleBotTurn(io, lobbyCode);
+    }, TRICK_DISPLAY_DELAY);
+    return;
   }
 
-  // Schedule next bot turn if needed
+  // No trick completed — schedule next bot turn immediately
   scheduleBotTurn(io, lobbyCode);
 }
 
@@ -448,5 +463,86 @@ function handleDisconnect(io, socket) {
   const msg = addChatMessage(result.lobbyCode, null, `${result.playerName} left the room`);
   if (msg) {
     io.to(result.lobbyCode).emit('chat_message', msg);
+  }
+}
+
+// --- Save game results to PostgreSQL ---
+
+async function saveGameResults(game, winningTeam) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const winTeamNum = winningTeam === 'team1' ? 1 : 2;
+
+    // Insert game record
+    const gameRes = await client.query(
+      `INSERT INTO games (ended_at, winning_team) VALUES (NOW(), $1) RETURNING id`,
+      [winTeamNum]
+    );
+    const gameId = gameRes.rows[0].id;
+
+    // Insert game_players
+    for (const player of game.players) {
+      const isWinner = player.team === winTeamNum;
+      await client.query(
+        `INSERT INTO game_players (game_id, user_id, team, seat_index, bot_name, is_winner)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          gameId,
+          player.isBot ? null : (player.userId || null),
+          player.team,
+          player.seatIndex,
+          player.isBot ? player.name : null,
+          isWinner,
+        ]
+      );
+    }
+
+    // Insert game_rounds and round_bids
+    for (const round of game.roundHistory) {
+      await client.query(
+        `INSERT INTO game_rounds (game_id, round_number, team1_round_score, team2_round_score, team1_total, team2_total, team1_bags, team2_bags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          gameId,
+          round.roundNumber,
+          round.team1Score,
+          round.team2Score,
+          round.team1Total,
+          round.team2Total,
+          round.team1Books || 0,
+          round.team2Books || 0,
+        ]
+      );
+
+      // Insert per-player bids for this round
+      for (const player of game.players) {
+        const bid = round.bids[player.id];
+        const tricks = round.tricksTaken[player.id];
+        if (bid !== undefined) {
+          await client.query(
+            `INSERT INTO round_bids (game_id, round_number, user_id, bot_name, bid, tricks_taken)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              gameId,
+              round.roundNumber,
+              player.isBot ? null : (player.userId || null),
+              player.isBot ? player.name : null,
+              bid,
+              tricks ?? 0,
+            ]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    console.log(`Game ${gameId} saved to database`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
 }

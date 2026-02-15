@@ -14,9 +14,9 @@ function generateCode() {
   return code;
 }
 
-export function createLobby(socketId, playerName) {
+export function createLobby(socketId, playerName, userId) {
   const code = generateCode();
-  const player = { id: socketId, name: playerName, team: null };
+  const player = { id: socketId, name: playerName, team: null, userId: userId || null };
   const lobby = {
     code,
     hostId: socketId,
@@ -29,7 +29,7 @@ export function createLobby(socketId, playerName) {
   return lobby;
 }
 
-export function joinLobby(socketId, playerName, lobbyCode) {
+export function joinLobby(socketId, playerName, lobbyCode, userId) {
   const code = lobbyCode.toUpperCase();
   const lobby = lobbies.get(code);
   if (!lobby) return { error: 'Room not found' };
@@ -39,7 +39,7 @@ export function joinLobby(socketId, playerName, lobbyCode) {
     return { error: 'Name already taken in this room' };
   }
 
-  const player = { id: socketId, name: playerName, team: null };
+  const player = { id: socketId, name: playerName, team: null, userId: userId || null };
   lobby.players.push(player);
   playerSockets.set(socketId, { playerName, lobbyCode: code });
   return { lobby, player };

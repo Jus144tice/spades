@@ -7,7 +7,7 @@ export function SocketProvider({ children }) {
   const socketRef = useRef(null);
 
   if (!socketRef.current) {
-    socketRef.current = io('/');
+    socketRef.current = io('/', { withCredentials: true });
   }
 
   return (

@@ -129,12 +129,17 @@ function gameReducer(state, action) {
       const newHand = action.data.playerId === state.playerId
         ? state.hand.filter(c => !(c.suit === action.data.card.suit && c.rank === action.data.card.rank))
         : state.hand;
+      // If a new card arrives while we're still showing a completed trick,
+      // it belongs to the next trick — clear the old one first
+      const baseTrick = state.trickWonPending ? [] : state.currentTrick;
       return {
         ...state,
         hand: newHand,
-        currentTrick: [...state.currentTrick, { playerId: action.data.playerId, card: action.data.card }],
+        currentTrick: [...baseTrick, { playerId: action.data.playerId, card: action.data.card }],
         currentTurnId: action.data.nextTurnId,
         spadesBroken: state.spadesBroken || action.data.card.suit === 'S',
+        lastTrickWinner: state.trickWonPending ? null : state.lastTrickWinner,
+        trickWonPending: false,
       };
     }
 
@@ -148,6 +153,9 @@ function gameReducer(state, action) {
       };
 
     case 'CLEAR_TRICK':
+      // If trickWonPending is already false, a new trick's cards have arrived
+      // and already cleared the old trick — don't wipe the new cards
+      if (!state.trickWonPending) return state;
       return {
         ...state,
         currentTrick: [],

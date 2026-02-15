@@ -74,6 +74,44 @@
   letter-spacing: 8px;
 }
 
+/* User info on join screen */
+.join-user-info {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.join-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.join-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.join-user-name {
+  font-weight: 600;
+  font-size: 14px;
+  flex: 1;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.join-stats {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .join-buttons {
   display: flex;
   flex-direction: column;
