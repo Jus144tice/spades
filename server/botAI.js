@@ -245,6 +245,77 @@ function countGuaranteedWinners(hand) {
   return count;
 }
 
+// --- OPPONENT DISPOSITION ESTIMATION ---
+// Guess whether opponents are in SET mode (trying to set us) or DUCK mode (avoiding bags)
+// Returns: positive = opponents likely setting, negative = opponents likely ducking
+
+function estimateOpponentDisposition(currentTrick, ctx) {
+  const totalBids = ctx.teamBid + ctx.oppBid;
+  const booksRemaining = 13 - totalBids;
+
+  // --- Same baseline as our own disposition ---
+  let oppDisp = 0;
+  if (booksRemaining <= 1) oppDisp = 2;
+  else if (booksRemaining === 2) oppDisp = 1;
+  else if (booksRemaining === 3) oppDisp = 0;
+  else if (booksRemaining === 4) oppDisp = -1;
+  else oppDisp = -2;
+
+  // --- If we already made our bid, opponents know they can't set us ---
+  if (ctx.teamTricks >= ctx.teamBid) {
+    oppDisp = Math.min(oppDisp, -1);
+  }
+
+  // --- Opponents already have bags → they're leaning into set ---
+  const oppBags = Math.max(0, ctx.oppTricks - ctx.oppBid);
+  if (oppBags >= 2) {
+    oppDisp += 1.5; // Significant bags = they're going for the set
+  } else if (oppBags >= 1 && ctx.teamTricks < ctx.teamBid) {
+    oppDisp += 0.5; // One bag and we haven't made bid = slight set lean
+  }
+
+  // --- Opponents made their bid early (lots of tricks left) ---
+  // Total tricks played so far
+  const totalTricksPlayed = ctx.teamTricks + ctx.oppTricks;
+  const tricksLeft = 13 - totalTricksPlayed;
+  if (ctx.oppTricks >= ctx.oppBid && tricksLeft >= 4) {
+    // Made bid with many tricks to go = they're in set mode
+    oppDisp += 1;
+  }
+
+  // --- Read opponent plays in the CURRENT trick ---
+  for (const play of currentTrick) {
+    const isOpp = play.playerId === ctx.opp1Id || play.playerId === ctx.opp2Id;
+    if (!isOpp) continue;
+
+    // Did opponent trump a non-spade lead?
+    if (currentTrick.length > 0 && currentTrick[0].card.suit !== 'S' && play.card.suit === 'S') {
+      // Opponent trumped - strong set signal (they're spending spades to take tricks)
+      oppDisp += 1.5;
+
+      // Extra weight if they trumped over a high card (A or K) that we or partner led
+      const ledCard = currentTrick[0].card;
+      const leaderIsUs = currentTrick[0].playerId === ctx.partnerId ||
+        currentTrick[0].playerId === ctx.players[ctx.botIndex]?.id;
+      if (leaderIsUs && RANK_VALUE[ledCard.rank] >= 13) {
+        // They trumped our Ace or King - very aggressive set behavior
+        oppDisp += 1;
+      }
+    }
+
+    // Did opponent discard off-suit (not trump) when they could have?
+    if (currentTrick.length > 0) {
+      const ledSuit = currentTrick[0].card.suit;
+      if (play.card.suit !== ledSuit && play.card.suit !== 'S' && ledSuit !== 'S') {
+        // Opponent couldn't follow suit but chose NOT to trump = duck signal
+        oppDisp -= 1;
+      }
+    }
+  }
+
+  return oppDisp;
+}
+
 // --- CARD PLAY ---
 
 export function botPlayCard(hand, gameState, botId) {
@@ -283,9 +354,34 @@ export function botPlayCard(hand, gameState, botId) {
     opp1Id, opp2Id, seatPosition, partnerBid, partnerTricks,
   };
 
-  // Calculate duck/set disposition
+  // Calculate our duck/set disposition
   ctx.disposition = calculateDisposition(hand, ctx);
-  // Derived booleans for convenience
+  // Estimate what opponents are doing
+  ctx.oppDisposition = estimateOpponentDisposition(currentTrick, ctx);
+
+  // --- React to opponent disposition ---
+  // If opponents are trying to set us, we need to protect our tricks
+  if (ctx.oppDisposition > 0 && needMore) {
+    // Opponents are setting us - be more urgent about making bid
+    ctx.urgentBid = true;
+  }
+  // If opponents are setting and partner lost a trick they were counting on,
+  // we may need to compensate by taking extra tricks
+  if (ctx.oppDisposition > 1 && ctx.partnerBid > 0 && ctx.partnerTricks < ctx.partnerBid) {
+    // Partner is behind - opponent is probably responsible. Compensate.
+    ctx.compensateForPartner = true;
+  }
+  // If opponents are ducking and we're not trying to set, duck harder
+  if (ctx.oppDisposition < 0 && ctx.disposition <= 0 && !needMore) {
+    ctx.disposition -= 0.5; // Both teams ducking = avoid bags harder
+  }
+  // If opponents are aggressively setting and we have bags already,
+  // lean into taking tricks defensively (they're coming for us)
+  if (ctx.oppDisposition > 1 && !needMore) {
+    ctx.disposition += 0.5; // Defensive aggression
+  }
+
+  // Derived booleans
   ctx.setMode = !needMore && ctx.disposition > 0 && oppTricks < oppBid;
   ctx.duckMode = !needMore && ctx.disposition < 0;
 
@@ -403,6 +499,25 @@ function leadToBustNil(validCards, ctx) {
 function leadWhenNeedingTricks(validCards, hand, ctx) {
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
+
+  // If opponents are setting us (urgentBid) or we need to compensate for partner,
+  // prioritize cashing guaranteed winners before they get trumped
+  if (ctx.urgentBid || ctx.compensateForPartner) {
+    // Cash aces immediately - don't risk them getting trumped
+    const aces = offSuit.filter(c => c.rank === 'A');
+    if (aces.length > 0) {
+      // Lead ace from shortest suit - most likely to cash before opponents void out
+      return pickFromShortestSuit(aces, hand);
+    }
+
+    // Lead high spades early to pull opponent trumps before they ruff our winners
+    if (spades.length > 0) {
+      const highSpades = spades.filter(c => RANK_VALUE[c.rank] >= 12);
+      if (highSpades.length > 0) {
+        return highSpades[0];
+      }
+    }
+  }
 
   // Lead Aces first
   const aces = offSuit.filter(c => c.rank === 'A');
@@ -639,17 +754,31 @@ function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCar
 function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx) {
   // --- Still need tricks to make bid ---
   if (ctx.needMore) {
+    // If partner is winning, usually let them have it
     if (winnerIsPartner && ctx.seatPosition === 3) {
-      return pickLowest(cardsOfSuit);
+      // Exception: if we need to compensate for partner AND partner is behind,
+      // we should still try to win so partner can save their remaining tricks
+      if (!ctx.compensateForPartner) {
+        return pickLowest(cardsOfSuit);
+      }
     }
     if (winnerIsPartner && ctx.seatPosition === 2) {
-      if (winningValue >= RANK_VALUE['Q']) {
+      if (winningValue >= RANK_VALUE['Q'] && !ctx.compensateForPartner) {
         return pickLowest(cardsOfSuit);
       }
     }
 
     const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
     if (beaters.length > 0) {
+      // If opponents are setting us, be willing to spend bigger cards to secure tricks
+      if (ctx.urgentBid && ctx.seatPosition <= 1) {
+        // Early in the trick and under pressure - play strong to ensure the win
+        // (opponent behind us might trump if we play just barely over)
+        const safeBeaters = beaters.filter(c => getEffectiveValue(c, ledSuit) >= RANK_VALUE['Q']);
+        if (safeBeaters.length > 0 && beaters.length > 1) {
+          return pickLowest(safeBeaters); // Win with authority but don't waste top card
+        }
+      }
       return pickLowest(beaters);
     }
     return pickLowest(cardsOfSuit);
@@ -660,12 +789,9 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
   if (ctx.setMode) {
     // SET MODE: try to win tricks to prevent opponents from making their bid
     if (winnerIsPartner) {
-      // Partner is winning - let them have it unless we can win more cheaply
-      // (partner might be taking bags too, but setting opponents is worth it)
       if (ctx.seatPosition === 3) {
-        return pickLowest(cardsOfSuit); // Partner has it, let them win
+        return pickLowest(cardsOfSuit);
       }
-      // If partner's card is strong and we're not last, still play low
       if (winningValue >= RANK_VALUE['J']) {
         return pickLowest(cardsOfSuit);
       }
@@ -674,19 +800,19 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
     // An opponent is currently winning - try to take the trick from them
     const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
     if (beaters.length > 0) {
-      return pickLowest(beaters); // Win cheaply
+      return pickLowest(beaters);
     }
-    // Can't win - dump lowest
     return pickLowest(cardsOfSuit);
   }
 
   // DUCK MODE: avoid taking tricks (bag avoidance)
+  // If opponents are also ducking, duck even harder - nobody wants these tricks
   if (winnerIsPartner) {
     return pickLowest(cardsOfSuit);
   }
   const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
-  if (underCards.length > 0) return pickHighest(underCards); // Highest losing card
-  return pickLowest(cardsOfSuit); // Forced to potentially win
+  if (underCards.length > 0) return pickHighest(underCards);
+  return pickLowest(cardsOfSuit);
 }
 
 function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx) {
@@ -695,7 +821,20 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
 
   // --- Still need tricks to make bid ---
   if (ctx.needMore) {
+    // If partner is winning, usually don't override - unless opponents are
+    // setting us and partner's winning card looks vulnerable to a later trump
     if (winnerIsPartner && ctx.seatPosition >= 2) {
+      if (ctx.urgentBid && ctx.seatPosition === 2 && winningValue < RANK_VALUE['K']) {
+        // Partner's card is weak and opponent plays last - they might trump.
+        // Secure the trick ourselves with a trump if possible
+        if (spades.length > 0 && ledSuit !== 'S') {
+          const currentHighTrump = currentTrick
+            .filter(t => t.card.suit === 'S')
+            .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
+          const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
+          if (beatingSpades.length > 0) return pickLowest(beatingSpades);
+        }
+      }
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
       return pickLowest(hand);
     }
