@@ -57,6 +57,57 @@
   letter-spacing: 1px;
 }
 
+/* Books remaining banner */
+.books-remaining-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0 4px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+}
+
+.books-remaining-number {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.books-remaining-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Books mood coloring */
+.books-remaining-banner.books-tight {
+  background: rgba(239, 83, 80, 0.12);
+  border-color: rgba(239, 83, 80, 0.4);
+}
+.books-tight .books-remaining-number {
+  color: var(--danger);
+}
+
+.books-remaining-banner.books-contested {
+  background: rgba(255, 213, 79, 0.1);
+  border-color: rgba(255, 213, 79, 0.3);
+}
+.books-contested .books-remaining-number {
+  color: var(--gold);
+}
+
+.books-remaining-banner.books-loose {
+  background: rgba(102, 187, 106, 0.1);
+  border-color: rgba(102, 187, 106, 0.3);
+}
+.books-loose .books-remaining-number {
+  color: var(--success);
+}
+
 .score-remaining {
   font-size: 11px;
   color: var(--text-secondary);
@@ -136,11 +187,6 @@
   position: relative;
 }
 
-.player-seat.active-turn {
-  border-color: var(--accent);
-  box-shadow: 0 0 16px rgba(79, 195, 247, 0.3);
-}
-
 .player-seat.is-me {
   background: rgba(79, 195, 247, 0.08);
 }
@@ -157,18 +203,68 @@
   margin-bottom: 4px;
 }
 
-.dealer-badge {
-  display: inline-block;
+/* Dealer Chip */
+.dealer-chip {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  z-index: 3;
+}
+
+.dealer-chip-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--gold);
   color: #000;
-  font-size: 10px;
-  font-weight: 700;
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
+  font-size: 11px;
+  font-weight: 800;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  margin-left: 6px;
-  vertical-align: middle;
+  border: 2px solid var(--bg-dark);
+  box-shadow: 0 2px 8px rgba(255, 213, 79, 0.5);
+}
+
+/* Turn Indicator */
+.turn-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 2px 0;
+}
+
+.turn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: turnPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes turnPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.turn-text {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+}
+
+.player-seat.active-turn {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(79, 195, 247, 0.35), inset 0 0 12px rgba(79, 195, 247, 0.06);
+  animation: turnGlow 2s ease-in-out infinite;
+}
+
+@keyframes turnGlow {
+  0%, 100% { box-shadow: 0 0 16px rgba(79, 195, 247, 0.3); }
+  50% { box-shadow: 0 0 24px rgba(79, 195, 247, 0.5), inset 0 0 12px rgba(79, 195, 247, 0.08); }
 }
 
 /* Bid & Tricks display */

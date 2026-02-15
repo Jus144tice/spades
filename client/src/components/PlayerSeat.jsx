@@ -10,10 +10,20 @@ export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDeale
 
   return (
     <div className={`player-seat ${isCurrentTurn ? 'active-turn' : ''} ${isMe ? 'is-me' : ''} ${isLastTrickWinner ? 'trick-winner' : ''}`}>
+      {isDealer && (
+        <div className="dealer-chip" title="Dealer">
+          <span className="dealer-chip-icon">D</span>
+        </div>
+      )}
       <div className="player-seat-name">
         {player.name}
-        {isDealer && <span className="dealer-badge">D</span>}
       </div>
+      {isCurrentTurn && (
+        <div className="turn-indicator">
+          <span className="turn-dot" />
+          <span className="turn-text">{hasBid ? 'Playing' : 'Bidding'}</span>
+        </div>
+      )}
       {hasBid ? (
         <div className="player-bid-tricks">
           <div className={`bid-display ${isNil ? 'nil-bid' : ''}`}>

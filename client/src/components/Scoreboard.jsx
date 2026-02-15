@@ -24,6 +24,19 @@ export default function Scoreboard() {
   const team1Tricks = team1Players.reduce((sum, p) => sum + (state.tricksTaken[p.id] || 0), 0);
   const team2Tricks = team2Players.reduce((sum, p) => sum + (state.tricksTaken[p.id] || 0), 0);
 
+  // Books remaining (free tricks)
+  const totalBid = allBidsIn ? team1Bid + team2Bid : null;
+  const booksRemaining = allBidsIn ? 13 - totalBid : null;
+  const tricksLeft = allBidsIn ? 13 - team1Tricks - team2Tricks : null;
+
+  // Books mood
+  let booksMood = '';
+  if (booksRemaining !== null) {
+    if (booksRemaining <= 1) booksMood = 'books-tight';
+    else if (booksRemaining === 2) booksMood = 'books-contested';
+    else if (booksRemaining >= 4) booksMood = 'books-loose';
+  }
+
   return (
     <div className="scoreboard">
       <div className="score-team">
@@ -39,8 +52,16 @@ export default function Scoreboard() {
       <div className="score-center">
         <div className="round-label">Round {state.roundNumber}</div>
         {allBidsIn && (
+          <div className={`books-remaining-banner ${booksMood}`}>
+            <span className="books-remaining-number">{booksRemaining}</span>
+            <span className="books-remaining-label">
+              {booksRemaining === 1 ? 'book' : 'books'} up for grabs
+            </span>
+          </div>
+        )}
+        {allBidsIn && tricksLeft !== null && tricksLeft < 13 && (
           <div className="score-remaining">
-            {13 - team1Tricks - team2Tricks} tricks left
+            {tricksLeft} tricks left
           </div>
         )}
         {state.roundHistory.length > 0 && (

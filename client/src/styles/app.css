@@ -219,22 +219,193 @@ body {
   color: var(--accent);
 }
 
-/* Round summary */
-.summary-section {
-  margin: 12px 0;
-  padding: 12px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 8px;
+/* Round summary modal */
+.round-summary-modal {
+  max-width: 520px;
 }
 
-.summary-player {
+.summary-section {
+  margin: 12px 0;
+  padding: 16px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  border-left: 3px solid var(--border);
+}
+
+.summary-section.summary-team1 {
+  border-left-color: var(--team1);
+}
+
+.summary-section.summary-team2 {
+  border-left-color: var(--team2);
+}
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.summary-header h3 {
+  margin: 0;
   font-size: 13px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.summary-result {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-result.made {
+  background: rgba(102, 187, 106, 0.15);
+  color: var(--success);
+}
+
+.summary-result.set {
+  background: rgba(239, 83, 80, 0.15);
+  color: var(--danger);
+}
+
+.summary-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* Player rows */
+.summary-players {
+  margin-bottom: 10px;
+}
+
+.summary-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 4px 0;
+  font-size: 13px;
+}
+
+.summary-player-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 80px;
+}
+
+.summary-player-bid,
+.summary-player-tricks {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.summary-nil-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 8px;
+  margin-left: auto;
+}
+
+.summary-nil-badge.nil-success {
+  background: rgba(102, 187, 106, 0.15);
+  color: var(--success);
+}
+
+.summary-nil-badge.nil-failed {
+  background: rgba(239, 83, 80, 0.15);
+  color: var(--danger);
+}
+
+/* Score breakdown */
+.summary-breakdown {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-bottom: 8px;
+}
+
+.breakdown-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
-.summary-score {
-  margin-top: 8px;
+.breakdown-line .positive {
+  color: var(--success);
   font-weight: 600;
+}
+
+.breakdown-line .negative {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.breakdown-line .bags {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.breakdown-line.bonus-line {
+  color: var(--accent);
+}
+
+.breakdown-line.penalty-line {
+  color: var(--danger);
+}
+
+.breakdown-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text-primary);
+}
+
+.breakdown-total .positive {
+  color: var(--success);
+}
+
+.breakdown-total .negative {
+  color: var(--danger);
+}
+
+/* Running total */
+.summary-total-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+.summary-total-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-total-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.summary-bags-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: auto;
 }
