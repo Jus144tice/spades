@@ -5,18 +5,44 @@ export default function Scoreboard() {
   const { state } = useGame();
   const [showHistory, setShowHistory] = useState(false);
 
-  const team1Names = state.players.filter(p => p.team === 1).map(p => p.name).join(' & ');
-  const team2Names = state.players.filter(p => p.team === 2).map(p => p.name).join(' & ');
+  const team1Players = state.players.filter(p => p.team === 1);
+  const team2Players = state.players.filter(p => p.team === 2);
+  const team1Names = team1Players.map(p => p.name).join(' & ');
+  const team2Names = team2Players.map(p => p.name).join(' & ');
+
+  const allBidsIn = Object.keys(state.bids).length === 4;
+
+  // Team bid totals
+  const team1Bid = allBidsIn
+    ? team1Players.reduce((sum, p) => sum + (state.bids[p.id] || 0), 0)
+    : null;
+  const team2Bid = allBidsIn
+    ? team2Players.reduce((sum, p) => sum + (state.bids[p.id] || 0), 0)
+    : null;
+
+  // Team tricks taken
+  const team1Tricks = team1Players.reduce((sum, p) => sum + (state.tricksTaken[p.id] || 0), 0);
+  const team2Tricks = team2Players.reduce((sum, p) => sum + (state.tricksTaken[p.id] || 0), 0);
 
   return (
     <div className="scoreboard">
       <div className="score-team">
         <div className="score-team-name">{team1Names}</div>
         <div className="score-value">{state.scores.team1}</div>
-        <div className="score-books">{state.books.team1} books</div>
+        <div className="score-books">{state.books.team1} bags</div>
+        {allBidsIn && (
+          <div className="score-bid-tracker">
+            Bid {team1Bid} &middot; Took {team1Tricks}/{team1Bid}
+          </div>
+        )}
       </div>
       <div className="score-center">
         <div className="round-label">Round {state.roundNumber}</div>
+        {allBidsIn && (
+          <div className="score-remaining">
+            {13 - team1Tricks - team2Tricks} tricks left
+          </div>
+        )}
         {state.roundHistory.length > 0 && (
           <button className="btn btn-tiny" onClick={() => setShowHistory(!showHistory)}>
             History
@@ -26,7 +52,12 @@ export default function Scoreboard() {
       <div className="score-team">
         <div className="score-team-name">{team2Names}</div>
         <div className="score-value">{state.scores.team2}</div>
-        <div className="score-books">{state.books.team2} books</div>
+        <div className="score-books">{state.books.team2} bags</div>
+        {allBidsIn && (
+          <div className="score-bid-tracker">
+            Bid {team2Bid} &middot; Took {team2Tricks}/{team2Bid}
+          </div>
+        )}
       </div>
 
       {showHistory && (
