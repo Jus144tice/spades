@@ -6,7 +6,7 @@ import { RANK_VALUE } from './game/constants.js';
  * - Nil protection mode when partner bids nil
  * - Opponent nil breaking tactics
  * - Position-aware play (2nd seat vs 4th seat)
- * - Bag avoidance when bid is met
+ * - Dynamic duck/set disposition based on books remaining, hand analysis, and partner signals
  */
 
 // --- BIDDING ---
@@ -27,28 +27,24 @@ export function botBid(hand, partnerBid, opponentBids, gameState) {
   let tricks = 0;
 
   // --- Count spade tricks ---
-  // High spades are very reliable. With more spades, mid spades become winners too.
   const spadeCount = spades.length;
   for (let i = 0; i < sortedSpades.length; i++) {
     const val = RANK_VALUE[sortedSpades[i].rank];
     if (val === 14) {
-      tricks += 1; // Ace of spades always wins
+      tricks += 1;
     } else if (val === 13) {
-      tricks += 0.9; // King of spades almost always wins
+      tricks += 0.9;
     } else if (val === 12) {
-      // Queen is good with 3+ spades or with A/K above it
       if (i >= 2 || spadeCount >= 3) tricks += 0.7;
       else tricks += 0.3;
     } else if (val === 11) {
-      // Jack needs length
       if (spadeCount >= 4) tricks += 0.5;
       else if (spadeCount >= 3 && i >= 2) tricks += 0.3;
     } else if (val === 10 && spadeCount >= 5) {
-      tricks += 0.3; // 10 of spades in a long suit
+      tricks += 0.3;
     }
   }
 
-  // Extra long spade tricks (5th+ spade in a long suit often wins)
   if (spadeCount >= 5) tricks += (spadeCount - 4) * 0.4;
 
   // --- Count off-suit tricks ---
@@ -59,57 +55,49 @@ export function botBid(hand, partnerBid, opponentBids, gameState) {
     const len = sorted.length;
 
     if (topVal === 14) {
-      tricks += 1; // Ace always wins
+      tricks += 1;
       if (len >= 2 && RANK_VALUE[sorted[1].rank] === 13) {
-        tricks += 0.8; // King behind Ace is very strong
+        tricks += 0.8;
         if (len >= 3 && RANK_VALUE[sorted[2].rank] === 12) {
-          tricks += 0.5; // Q behind A-K in 3+ suit
+          tricks += 0.5;
         }
       }
     } else if (topVal === 13) {
-      // Lone King or short King - risky
-      if (len === 1) tricks += 0.3; // Might get trumped or Ace is out
+      if (len === 1) tricks += 0.3;
       else if (len === 2) tricks += 0.4;
-      else tricks += 0.5; // Protected King in long suit
+      else tricks += 0.5;
     } else if (topVal === 12 && len >= 3) {
-      tricks += 0.2; // Queen in long suit, marginal
+      tricks += 0.2;
     }
   }
 
   // --- Void/short suit ruffing potential ---
   for (const [suitKey, suitCards] of Object.entries(suits)) {
     if (suitCards.length === 0 && spadeCount >= 1) {
-      // Void = guaranteed ruff if suit is led
       tricks += Math.min(spadeCount - countHighSpades(sortedSpades), 1.0);
-      // Can ruff at least once per void
     } else if (suitCards.length === 1 && spadeCount >= 2) {
-      tricks += 0.5; // Singleton = likely ruff after one round
+      tricks += 0.5;
     } else if (suitCards.length === 2 && spadeCount >= 3) {
-      tricks += 0.2; // Doubleton with good spade backup
+      tricks += 0.2;
     }
   }
 
   let bid = Math.round(tricks);
 
-  // --- Adjustments based on partner/opponent bids ---
-
-  // If partner bid nil, we need to cover - bid more aggressively
+  // If partner bid nil, we need to cover
   if (partnerBid === 0) {
     bid = Math.max(bid, 3);
-    // We'll be leading a lot and trying to win tricks - add confidence
     bid = Math.min(13, bid + 1);
   }
 
-  // If combined team bid feels too high relative to 13, trim slightly
+  // Trim if combined team bid is too aggressive
   if (partnerBid !== undefined && partnerBid !== null && partnerBid > 0) {
     const combinedBid = bid + partnerBid;
     if (combinedBid > 10) {
-      // Be conservative - trim back on marginal tricks
       bid = Math.max(1, bid - 1);
     }
   }
 
-  // Don't bid 0 unless going nil - minimum bid is 1
   bid = Math.max(1, bid);
   bid = Math.min(13, bid);
 
@@ -120,50 +108,37 @@ function evaluateNil(hand, sortedSpades, spades, suits, partnerBid) {
   const spadeCount = spades.length;
   const highestSpade = sortedSpades.length > 0 ? RANK_VALUE[sortedSpades[0].rank] : 0;
 
-  // Disqualifiers for nil:
-  // - Any spade Q or higher makes nil very risky
   if (highestSpade >= 12) return false;
-  // - Jack of spades with 3+ spades is too risky
   if (highestSpade === 11 && spadeCount >= 3) return false;
 
-  // Count high cards (cards that are hard to duck under)
-  const highCards = hand.filter(c => RANK_VALUE[c.rank] >= 12).length; // Q, K, A
-  if (highCards >= 2) return false; // Too many high cards
+  const highCards = hand.filter(c => RANK_VALUE[c.rank] >= 12).length;
+  if (highCards >= 2) return false;
 
-  // Count medium cards (J, 10) - these are risky
   const medCards = hand.filter(c => RANK_VALUE[c.rank] >= 10 && RANK_VALUE[c.rank] <= 11).length;
-  if (highCards + medCards >= 4) return false; // Too much middle strength
+  if (highCards + medCards >= 4) return false;
 
-  // Check off-suit vulnerability: any Ace or lone King is a nil killer
   for (const [suitKey, suitCards] of Object.entries(suits)) {
     if (suitCards.length === 0) continue;
     const sorted = [...suitCards].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
-    if (RANK_VALUE[sorted[0].rank] === 14) return false; // Off-suit Ace - can't duck
-    if (RANK_VALUE[sorted[0].rank] === 13 && suitCards.length <= 2) return false; // Short King
+    if (RANK_VALUE[sorted[0].rank] === 14) return false;
+    if (RANK_VALUE[sorted[0].rank] === 13 && suitCards.length <= 2) return false;
   }
 
-  // Check for enough low cards to safely duck
   const lowCards = hand.filter(c => RANK_VALUE[c.rank] <= 7).length;
   if (lowCards < 6) return false;
 
-  // Prefer nil when partner has bid a healthy amount (3+)
-  // so they can protect us
   if (partnerBid !== undefined && partnerBid !== null && partnerBid >= 3) {
-    return true; // Partner is strong, we can go nil
+    return true;
   }
 
-  // Even without partner info, go nil if hand is very weak
   if (lowCards >= 9 && highCards === 0 && highestSpade <= 8) {
     return true;
   }
 
-  // If partner hasn't bid yet, be more conservative about nil
   if (partnerBid === undefined || partnerBid === null) {
-    // Only nil with a truly awful hand
     return lowCards >= 8 && highCards === 0 && medCards <= 1 && highestSpade <= 9;
   }
 
-  // Partner bid but bid low (1-2) - only nil if hand is weak enough
   return lowCards >= 8 && highCards === 0 && highestSpade <= 9;
 }
 
@@ -173,6 +148,100 @@ function countHighSpades(sortedSpades) {
     if (RANK_VALUE[s.rank] >= 12) count++;
     else break;
   }
+  return count;
+}
+
+// --- DISPOSITION SYSTEM ---
+// Returns a value: positive = SET mode (try to take tricks from opponents)
+//                  negative = DUCK mode (avoid taking extra tricks / bags)
+//                  0 = neutral
+
+function calculateDisposition(hand, ctx) {
+  const totalBids = ctx.teamBid + ctx.oppBid;
+  const booksRemaining = 13 - totalBids; // "free" tricks nobody bid on
+
+  // --- Base disposition from books remaining ---
+  // <=2 books: lean SET, >=4 books: lean DUCK, 3: neutral
+  let disposition = 0;
+  if (booksRemaining <= 1) disposition = 2;
+  else if (booksRemaining === 2) disposition = 1;
+  else if (booksRemaining === 3) disposition = 0;
+  else if (booksRemaining === 4) disposition = -1;
+  else disposition = -2; // 5+ books = heavy duck
+
+  // --- If opponents already made their bid, can't set them ---
+  if (ctx.oppTricks >= ctx.oppBid) {
+    // Can't set opponents anymore - switch to duck to avoid bags
+    disposition = Math.min(disposition, -1);
+  }
+
+  // --- Look at current bag trajectory ---
+  // If our team already has extra tricks (bags accumulating), lean toward SET
+  // because we're taking bags anyway, might as well try to set opponents
+  const teamBags = Math.max(0, ctx.teamTricks - ctx.teamBid);
+  if (teamBags >= 2) {
+    // Already have bags - might as well play aggressively to try to set
+    disposition += 1;
+  } else if (teamBags >= 1 && ctx.oppTricks < ctx.oppBid) {
+    // We have a bag and opponents still need tricks - slight set lean
+    disposition += 0.5;
+  }
+
+  // --- Project guaranteed future winners (bags we know are coming) ---
+  const guaranteedFutureWins = countGuaranteedWinners(hand);
+  const projectedBags = teamBags + guaranteedFutureWins;
+  if (ctx.teamTricks >= ctx.teamBid && projectedBags >= 2) {
+    // We've made our bid and have guaranteed future bags coming
+    // Lean into set mode since we're getting bags anyway
+    disposition += 1;
+  }
+
+  // --- Partner signals (inferred from trick counts) ---
+  // If partner has taken way more than their share, they're playing aggressively (SET)
+  if (ctx.partnerBid > 0) {
+    const partnerExcess = ctx.partnerTricks - ctx.partnerBid;
+    if (partnerExcess >= 2) {
+      // Partner is taking lots of extra tricks - they're in set mode
+      disposition += 1;
+    } else if (partnerExcess < 0 && ctx.teamTricks >= ctx.teamBid) {
+      // Team made bid but partner is under their individual bid
+      // Bot is carrying - partner might be ducking
+      disposition -= 0.5;
+    }
+  }
+
+  // --- If we haven't made our own bid yet, disposition doesn't matter as much ---
+  // (we need to focus on making bid first)
+  // But it still affects how aggressively we pursue tricks beyond our need
+
+  return disposition;
+}
+
+function countGuaranteedWinners(hand) {
+  let count = 0;
+  const spades = hand.filter(c => c.suit === 'S')
+    .sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+
+  // Ace of spades is always a winner
+  if (spades.length > 0 && RANK_VALUE[spades[0].rank] === 14) {
+    count++;
+    // King of spades behind Ace is also guaranteed
+    if (spades.length > 1 && RANK_VALUE[spades[1].rank] === 13) {
+      count++;
+    }
+  }
+
+  // Off-suit Aces are near-guaranteed (could be trumped, but usually win)
+  for (const suit of ['H', 'D', 'C']) {
+    const suitCards = hand.filter(c => c.suit === suit);
+    if (suitCards.length > 0) {
+      const highest = suitCards.reduce((best, c) =>
+        RANK_VALUE[c.rank] > RANK_VALUE[best.rank] ? c : best
+      );
+      if (RANK_VALUE[highest.rank] === 14) count += 0.7; // might get trumped
+    }
+  }
+
   return count;
 }
 
@@ -195,7 +264,6 @@ export function botPlayCard(hand, gameState, botId) {
   const opp1Bid = bids[opp1Id];
   const opp2Bid = bids[opp2Id];
 
-  // Team analysis
   const teamBid = (botBidVal || 0) + (partnerBid === 0 ? 0 : partnerBid || 0);
   const teamTricks = botTricks + partnerTricks;
   const needMore = teamBid > teamTricks;
@@ -206,7 +274,7 @@ export function botPlayCard(hand, gameState, botId) {
   const oppTricks = (tricksTaken[opp1Id] || 0) + (tricksTaken[opp2Id] || 0);
   const opp1IsNil = opp1Bid === 0;
   const opp2IsNil = opp2Bid === 0;
-  const seatPosition = currentTrick.length; // 0=lead, 1=2nd, 2=3rd, 3=last
+  const seatPosition = currentTrick.length;
 
   const ctx = {
     needMore, tricksNeeded, partnerIsNil, botIsNil, spadesBroken,
@@ -214,6 +282,12 @@ export function botPlayCard(hand, gameState, botId) {
     botTricks, botBidVal, partnerId, players, botIndex,
     opp1Id, opp2Id, seatPosition, partnerBid, partnerTricks,
   };
+
+  // Calculate duck/set disposition
+  ctx.disposition = calculateDisposition(hand, ctx);
+  // Derived booleans for convenience
+  ctx.setMode = !needMore && ctx.disposition > 0 && oppTricks < oppBid;
+  ctx.duckMode = !needMore && ctx.disposition < 0;
 
   if (currentTrick.length === 0) {
     return botLead(hand, ctx);
@@ -227,38 +301,41 @@ export function botPlayCard(hand, gameState, botId) {
 function botLead(hand, ctx) {
   const validCards = getValidLeads(hand, ctx.spadesBroken);
 
-  // --- Bot is nil: lead lowest to avoid winning ---
+  // Bot is nil: lead lowest to avoid winning
   if (ctx.botIsNil) {
     return leadAsNil(validCards);
   }
 
-  // --- Partner is nil: lead to protect partner ---
+  // Partner is nil: lead to protect partner
   if (ctx.partnerIsNil) {
     return leadToProtectNil(validCards, hand, ctx);
   }
 
-  // --- Opponent is nil: try to bust them ---
+  // Opponent is nil: try to bust them
   if (ctx.opp1IsNil || ctx.opp2IsNil) {
     return leadToBustNil(validCards, ctx);
   }
 
-  // --- Normal play ---
+  // Still need tricks to make bid
   if (ctx.needMore) {
     return leadWhenNeedingTricks(validCards, hand, ctx);
+  }
+
+  // Bid is met - play based on disposition
+  if (ctx.setMode) {
+    return leadInSetMode(validCards, hand, ctx);
   } else {
-    return leadWhenAvoidingBags(validCards, hand, ctx);
+    return leadInDuckMode(validCards, hand, ctx);
   }
 }
 
 function leadAsNil(validCards) {
-  // Lead from our longest suit with lowest card to minimize winning chance
   const groups = groupBySuit(validCards);
   let bestCard = null;
   let bestLen = -1;
 
   for (const [suit, cards] of Object.entries(groups)) {
-    const lowest = cards[cards.length - 1]; // cards sorted desc, last is lowest
-    // Prefer long suits (more escape opportunities) and low cards
+    const lowest = cards[cards.length - 1];
     if (cards.length > bestLen ||
         (cards.length === bestLen && RANK_VALUE[lowest.rank] < RANK_VALUE[bestCard.rank])) {
       bestCard = lowest;
@@ -269,22 +346,15 @@ function leadAsNil(validCards) {
 }
 
 function leadToProtectNil(validCards, hand, ctx) {
-  // Strategy: Win tricks with high cards so partner doesn't have to.
-  // Lead Aces (guaranteed win), then Kings, then high spades.
-  // Prefer leading from SHORT off-suits so we can ruff later to protect partner.
-
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
 
   if (offSuit.length > 0) {
-    // Lead Aces first - guaranteed to win and protect partner
     const aces = offSuit.filter(c => c.rank === 'A');
     if (aces.length > 0) {
-      // Lead ace from shortest suit (to void quickly for future ruffing)
       return pickFromShortestSuit(aces, hand);
     }
 
-    // Lead Kings
     const kings = offSuit.filter(c => c.rank === 'K');
     if (kings.length > 0) {
       return pickFromShortestSuit(kings, hand);
@@ -302,39 +372,31 @@ function leadToProtectNil(validCards, hand, ctx) {
       }
     }
     if (shortestSuit) {
-      return groups[shortestSuit][0]; // Highest from shortest suit
+      return groups[shortestSuit][0];
     }
 
     return pickHighest(offSuit);
   }
 
-  // Only spades left - lead highest to pull out opponent spades
-  // This protects partner from getting trumped later
   return pickHighest(spades);
 }
 
 function leadToBustNil(validCards, ctx) {
-  // Lead mid-range cards that are hard to duck under
-  // Ideal: 8-J range cards that might catch a nil bidder
   const offSuit = validCards.filter(c => c.suit !== 'S');
 
   if (offSuit.length > 0) {
-    // Lead cards in the 8-J range - hard to duck
     const midCards = offSuit.filter(c => {
       const v = RANK_VALUE[c.rank];
       return v >= 8 && v <= 11;
     });
     if (midCards.length > 0) return pickRandom(midCards);
 
-    // If no mid cards, lead low-medium to force plays
     const lowMid = offSuit.filter(c => RANK_VALUE[c.rank] >= 6 && RANK_VALUE[c.rank] <= 9);
     if (lowMid.length > 0) return pickRandom(lowMid);
 
-    return pickLowest(offSuit); // At least make them play
+    return pickLowest(offSuit);
   }
 
-  // Leading spades against nil bidder - lead low spades
-  // Nil bidder has to play above us or dump
   return pickLowest(validCards);
 }
 
@@ -342,35 +404,34 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
 
-  // Lead Aces first - guaranteed winners
+  // Lead Aces first
   const aces = offSuit.filter(c => c.rank === 'A');
   if (aces.length > 0) return pickRandom(aces);
 
-  // Lead A-K from same suit (cash the King knowing Ace already won or vice versa)
+  // Lead Kings from suits where we have strength
   const groups = groupBySuit(offSuit);
   for (const [suit, cards] of Object.entries(groups)) {
     if (cards.length >= 2 && RANK_VALUE[cards[0].rank] === 13) {
-      // King-high in a suit - lead it to set up
       return cards[0];
     }
   }
 
-  // Lead from long suits with strength (4+ cards with Q+)
+  // Lead from long suits with strength
   for (const [suit, cards] of Object.entries(groups)) {
     if (cards.length >= 4 && RANK_VALUE[cards[0].rank] >= 12) {
-      return cards[0]; // Lead high from long suit to establish
+      return cards[0];
     }
   }
 
-  // Lead high spades to pull trumps if we have spade tricks to cash
+  // Lead high spades
   if (spades.length > 0) {
     const highSpades = spades.filter(c => RANK_VALUE[c.rank] >= 13);
     if (highSpades.length > 0) {
-      return highSpades[0]; // Lead A or K of spades
+      return highSpades[0];
     }
   }
 
-  // Lead from short suits to set up a void for ruffing
+  // Lead from short suits to create voids
   if (offSuit.length > 0) {
     let shortestSuit = null;
     let shortestLen = 14;
@@ -382,22 +443,65 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
       }
     }
     if (shortestSuit) {
-      // Lead low from short suit to void it
       return pickLowest(groups[shortestSuit]);
     }
   }
 
-  // Default: lead highest available
   if (offSuit.length > 0) return pickHighest(offSuit);
   return pickHighest(validCards);
 }
 
-function leadWhenAvoidingBags(validCards, hand, ctx) {
-  // We've met our bid - try to lose the lead
+function leadInSetMode(validCards, hand, ctx) {
+  // SET MODE: We've made our bid but want to take tricks from opponents.
+  // Lead strong cards to steal tricks opponents are counting on.
+  const offSuit = validCards.filter(c => c.suit !== 'S');
+  const spades = validCards.filter(c => c.suit === 'S');
+
+  // Lead high spades to pull opponent trumps - this is devastating in set mode
+  // because it strips their ruffing ability
+  if (spades.length > 0) {
+    const highSpades = spades.filter(c => RANK_VALUE[c.rank] >= 12);
+    if (highSpades.length > 0) {
+      return highSpades[0]; // Lead A, K, or Q of spades
+    }
+  }
+
+  // Lead Aces to grab tricks
+  const aces = offSuit.filter(c => c.rank === 'A');
+  if (aces.length > 0) return pickRandom(aces);
+
+  // Lead Kings
+  const kings = offSuit.filter(c => c.rank === 'K');
+  if (kings.length > 0) return pickRandom(kings);
+
+  // Lead from short suits - if we can void, we can trump opponent winners later
+  if (offSuit.length > 0) {
+    const groups = groupBySuit(offSuit);
+    let shortestSuit = null;
+    let shortestLen = 14;
+    for (const [suit, cards] of Object.entries(groups)) {
+      const suitLen = hand.filter(c => c.suit === suit).length;
+      if (suitLen > 0 && suitLen < shortestLen) {
+        shortestLen = suitLen;
+        shortestSuit = suit;
+      }
+    }
+    if (shortestSuit && shortestLen <= 2) {
+      return pickLowest(groups[shortestSuit]); // Void the short suit
+    }
+    // Lead highest available
+    return pickHighest(offSuit);
+  }
+
+  return pickHighest(validCards);
+}
+
+function leadInDuckMode(validCards, hand, ctx) {
+  // DUCK MODE: We've made our bid, avoid taking extra tricks (bags).
   const offSuit = validCards.filter(c => c.suit !== 'S');
 
   if (offSuit.length > 0) {
-    // Lead low from shortest off-suit to get rid of the lead
+    // Lead low from shortest off-suit to give up the lead
     const groups = groupBySuit(offSuit);
     let shortestSuit = null;
     let shortestLen = 14;
@@ -414,7 +518,6 @@ function leadWhenAvoidingBags(validCards, hand, ctx) {
     return pickLowest(offSuit);
   }
 
-  // Only spades - lead lowest
   return pickLowest(validCards);
 }
 
@@ -428,50 +531,42 @@ function botFollow(hand, currentTrick, ctx) {
 
   const currentWinner = getCurrentWinner(currentTrick);
   const winnerIsPartner = currentWinner.playerId === ctx.partnerId;
-  const winnerIsOpp = !winnerIsPartner;
   const winningValue = getEffectiveValue(currentWinner.card, ledSuit);
 
-  // --- Bot is nil: try to lose ---
+  // Bot is nil: try to lose
   if (ctx.botIsNil) {
-    return followAsNil(hand, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue, currentTrick);
+    return followAsNil(hand, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue);
   }
 
-  // --- Partner is nil: protect them ---
+  // Partner is nil: protect them
   if (ctx.partnerIsNil) {
     const nilCard = followToProtectNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue, ctx);
     if (nilCard) return nilCard;
-    // Fall through to normal play if no nil-specific action needed
   }
 
-  // --- Opponent is nil: try to bust them ---
-  if ((ctx.opp1IsNil || ctx.opp2IsNil)) {
+  // Opponent is nil: try to bust them
+  if (ctx.opp1IsNil || ctx.opp2IsNil) {
     const bustCard = followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue, ctx);
     if (bustCard) return bustCard;
-    // Fall through to normal play
   }
 
-  // --- Normal following ---
+  // Normal following - now disposition-aware
   if (hasLedSuit) {
-    return followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, ctx);
+    return followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx);
   } else {
     return discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx);
   }
 }
 
-function followAsNil(hand, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue, currentTrick) {
+function followAsNil(hand, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue) {
   if (hasLedSuit) {
-    // Play the highest card that still loses
     const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
-    if (underCards.length > 0) return pickHighest(underCards); // Highest that still ducks
-    // All our cards beat the current winner - play lowest to minimize damage
+    if (underCards.length > 0) return pickHighest(underCards);
     return pickLowest(cardsOfSuit);
   }
 
-  // Can't follow suit - dump our highest non-spade cards (get rid of dangerous cards)
   const nonSpade = nonSuitCards.filter(c => c.suit !== 'S');
   if (nonSpade.length > 0) return pickHighest(nonSpade);
-
-  // Only spades left - play lowest (might trump and win, which is bad)
   return pickLowest(hand);
 }
 
@@ -482,13 +577,11 @@ function followToProtectNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuit
     const partnerIsWinning = getCurrentWinner(currentTrick).playerId === ctx.partnerId;
 
     if (partnerIsWinning) {
-      // Partner is winning - we MUST overtake them to save their nil
       if (hasLedSuit) {
         const partnerCardValue = getEffectiveValue(partnerPlayed.card, ledSuit);
         const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > partnerCardValue);
-        if (beaters.length > 0) return pickLowest(beaters); // Beat partner with minimum
+        if (beaters.length > 0) return pickLowest(beaters);
       }
-      // Can't follow suit - trump to save partner
       if (!hasLedSuit && ledSuit !== 'S') {
         const spades = hand.filter(c => c.suit === 'S');
         const currentHighTrump = currentTrick
@@ -500,37 +593,30 @@ function followToProtectNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuit
       }
     }
   } else {
-    // Partner hasn't played yet - play high to try to win before partner has to play
-    // (especially if we're 2nd seat, we want to take the trick)
     if (ctx.seatPosition <= 1) {
       if (hasLedSuit) {
-        // Play high to win and take the trick from partner
         const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
         if (beaters.length > 0) return pickHighest(beaters);
       }
     }
   }
 
-  return null; // No nil-specific action, fall through to normal
+  return null;
 }
 
 function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue, ctx) {
-  // Check if nil bidder is in this trick
   const nilOppId = ctx.opp1IsNil ? ctx.opp1Id : (ctx.opp2IsNil ? ctx.opp2Id : null);
   if (!nilOppId) return null;
 
   const nilPlayerPlayed = currentTrick.find(t => t.playerId === nilOppId);
 
   if (nilPlayerPlayed) {
-    // Nil bidder already played - if they're winning, let them win (busts nil)
     const nilIsWinning = getCurrentWinner(currentTrick).playerId === nilOppId;
     if (nilIsWinning) {
-      // Play low - let the nil bidder keep the trick
       if (hasLedSuit) {
         const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < getEffectiveValue(nilPlayerPlayed.card, ledSuit));
         if (underCards.length > 0) return pickLowest(underCards);
       }
-      // Discard low
       if (!hasLedSuit) {
         const nonSpade = nonSuitCards.filter(c => c.suit !== 'S');
         if (nonSpade.length > 0) return pickLowest(nonSpade);
@@ -538,8 +624,6 @@ function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCar
       }
     }
   } else {
-    // Nil bidder hasn't played yet - if we're before them, play strategically
-    // Play a medium card that's hard to duck under
     if (hasLedSuit && ctx.seatPosition <= 1) {
       const midCards = cardsOfSuit.filter(c => {
         const v = RANK_VALUE[c.rank];
@@ -549,88 +633,125 @@ function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCar
     }
   }
 
-  return null; // No bust-specific action
+  return null;
 }
 
-function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, ctx) {
+function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx) {
+  // --- Still need tricks to make bid ---
   if (ctx.needMore) {
-    // Need tricks - try to win
     if (winnerIsPartner && ctx.seatPosition === 3) {
-      // Partner is winning and we're last to play - play lowest (let partner have it)
       return pickLowest(cardsOfSuit);
     }
-    if (winnerIsPartner && ctx.seatPosition === 2 && !ctx.partnerIsNil) {
-      // Partner winning, we're 3rd, one more to play. If partner's card is strong, duck.
+    if (winnerIsPartner && ctx.seatPosition === 2) {
       if (winningValue >= RANK_VALUE['Q']) {
-        return pickLowest(cardsOfSuit); // Partner has a good card, play low
+        return pickLowest(cardsOfSuit);
       }
     }
 
     const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
     if (beaters.length > 0) {
-      // Win with cheapest winning card
       return pickLowest(beaters);
+    }
+    return pickLowest(cardsOfSuit);
+  }
+
+  // --- Bid is met: play based on disposition ---
+
+  if (ctx.setMode) {
+    // SET MODE: try to win tricks to prevent opponents from making their bid
+    if (winnerIsPartner) {
+      // Partner is winning - let them have it unless we can win more cheaply
+      // (partner might be taking bags too, but setting opponents is worth it)
+      if (ctx.seatPosition === 3) {
+        return pickLowest(cardsOfSuit); // Partner has it, let them win
+      }
+      // If partner's card is strong and we're not last, still play low
+      if (winningValue >= RANK_VALUE['J']) {
+        return pickLowest(cardsOfSuit);
+      }
+    }
+
+    // An opponent is currently winning - try to take the trick from them
+    const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
+    if (beaters.length > 0) {
+      return pickLowest(beaters); // Win cheaply
     }
     // Can't win - dump lowest
     return pickLowest(cardsOfSuit);
-
-  } else {
-    // Met our bid - avoid winning tricks (bag avoidance)
-    if (winnerIsPartner) {
-      return pickLowest(cardsOfSuit); // Let partner have it
-    }
-    // Try to play under the winning card
-    const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
-    if (underCards.length > 0) return pickHighest(underCards); // Highest losing card
-    return pickLowest(cardsOfSuit); // Forced to potentially win
   }
+
+  // DUCK MODE: avoid taking tricks (bag avoidance)
+  if (winnerIsPartner) {
+    return pickLowest(cardsOfSuit);
+  }
+  const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
+  if (underCards.length > 0) return pickHighest(underCards); // Highest losing card
+  return pickLowest(cardsOfSuit); // Forced to potentially win
 }
 
 function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx) {
   const spades = hand.filter(c => c.suit === 'S');
   const nonSpade = nonSuitCards.filter(c => c.suit !== 'S');
 
+  // --- Still need tricks to make bid ---
   if (ctx.needMore) {
-    // Need tricks - consider trumping
     if (winnerIsPartner && ctx.seatPosition >= 2) {
-      // Partner is winning - don't waste a trump, discard instead
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
-      // Only spades left - play lowest to conserve
       return pickLowest(hand);
     }
 
-    // Try to trump to win the trick
+    // Trump to win
     if (spades.length > 0 && ledSuit !== 'S') {
       const currentHighTrump = currentTrick
         .filter(t => t.card.suit === 'S')
         .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
       const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
       if (beatingSpades.length > 0) return pickLowest(beatingSpades);
-      // Can't beat existing trump - discard
     }
 
-    // Can't trump or not worth it - discard
     if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
     return pickLowest(hand);
+  }
 
-  } else {
-    // Met bid - discard high dangerous cards to avoid future bag wins
-    if (nonSpade.length > 0) {
-      // Dump highest off-suit cards from short suits
-      return dumpCard(nonSpade, hand, ctx);
+  // --- Bid is met: play based on disposition ---
+
+  if (ctx.setMode) {
+    // SET MODE: aggressively trump to steal tricks from opponents
+    if (winnerIsPartner) {
+      // Partner is winning - don't override them, discard instead
+      if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+      return pickLowest(hand);
     }
+
+    // Opponent is winning - trump them to set
+    if (spades.length > 0 && ledSuit !== 'S') {
+      const currentHighTrump = currentTrick
+        .filter(t => t.card.suit === 'S')
+        .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
+      const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
+      if (beatingSpades.length > 0) return pickLowest(beatingSpades);
+    }
+
+    // Can't trump - discard
+    if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
     return pickLowest(hand);
   }
+
+  // DUCK MODE: dump dangerous high cards, avoid trumping
+  if (nonSpade.length > 0) {
+    return pickHighest(nonSpade); // Dump highest off-suit to shed dangerous winners
+  }
+  return pickLowest(hand);
 }
 
-// Smart discard: dump high cards from short suits to create voids or shed danger
+// Smart discard
 function dumpCard(candidates, hand, ctx) {
-  // If we don't need more tricks, dump the highest dangerous card
-  if (!ctx.needMore) {
+  if (!ctx.needMore && !ctx.setMode) {
+    // Duck mode: dump highest to get rid of future winners
     return pickHighest(candidates);
   }
 
-  // If we need tricks, dump from shortest suit (to create a void for future ruffing)
+  // Need tricks or set mode: dump from shortest suit to create voids for ruffing
   const groups = groupBySuit(candidates);
   let shortestSuit = null;
   let shortestLen = 14;
@@ -642,7 +763,7 @@ function dumpCard(candidates, hand, ctx) {
     }
   }
   if (shortestSuit) {
-    return pickLowest(groups[shortestSuit]); // Low from shortest suit
+    return pickLowest(groups[shortestSuit]);
   }
   return pickLowest(candidates);
 }
@@ -711,7 +832,6 @@ function pickRandom(cards) {
   return cards[Math.floor(Math.random() * cards.length)];
 }
 
-// Pick a card from the shortest suit (by looking at full hand)
 function pickFromShortestSuit(candidates, hand) {
   if (candidates.length === 1) return candidates[0];
 
