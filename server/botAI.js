@@ -515,9 +515,25 @@ export function botPlayCard(hand, gameState, botId) {
     ctx.disposition += 0.5; // Defensive aggression
   }
 
+  // --- Guaranteed-to-make detection ---
+  // Even when needMore is true, check if our remaining hand guarantees making bid.
+  // If so, we can play disposition-aware (set/duck) while strategically using winners.
+  ctx.canGuaranteeBid = false;
+  if (needMore && !botIsNil) {
+    const guaranteedWins = countGuaranteedWinners(hand, memory);
+    if (guaranteedWins >= tricksNeeded) {
+      ctx.canGuaranteeBid = true;
+    }
+  }
+
   // Derived booleans
-  ctx.setMode = !needMore && ctx.disposition > 0 && oppTricks < oppBid;
-  ctx.duckMode = !needMore && ctx.disposition < 0;
+  const effectivelyMadeBid = !needMore || ctx.canGuaranteeBid;
+  ctx.setMode = effectivelyMadeBid && ctx.disposition > 0 && oppTricks < oppBid;
+  ctx.duckMode = effectivelyMadeBid && ctx.disposition < 0;
+
+  // Count inevitable winners in hand — cards that WILL win a future trick no matter what.
+  // Used for consolidation: dump these on partner's tricks to avoid creating extra bags.
+  ctx.inevitableWinners = hand.filter(c => isMasterCard(c, memory));
 
   if (currentTrick.length === 0) {
     return botLead(hand, ctx);
@@ -548,6 +564,17 @@ function botLead(hand, ctx) {
 
   // Still need tricks to make bid
   if (ctx.needMore) {
+    // If we can guarantee making bid, lead based on disposition
+    // but use guaranteed winners strategically
+    if (ctx.canGuaranteeBid) {
+      if (ctx.setMode) {
+        return leadInSetMode(validCards, hand, ctx);
+      } else if (ctx.duckMode) {
+        // Duck mode but need tricks: lead our guaranteed winners (masters)
+        // to make bid with minimal extra bags, then duck with the rest
+        return leadGuaranteedThenDuck(validCards, hand, ctx);
+      }
+    }
     return leadWhenNeedingTricks(validCards, hand, ctx);
   }
 
@@ -722,6 +749,33 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
 
   if (offSuit.length > 0) return pickHighest(offSuit);
   return pickHighest(validCards);
+}
+
+function leadGuaranteedThenDuck(validCards, hand, ctx) {
+  // We can guarantee our bid but want to minimize bags.
+  // Strategy: lead master cards to collect our guaranteed tricks,
+  // but lead from suits where we have the fewest extra cards (minimize future bags).
+  const memory = ctx.memory;
+  const offSuit = validCards.filter(c => c.suit !== 'S');
+  const spades = validCards.filter(c => c.suit === 'S');
+
+  // If we still need tricks, lead masters to collect them
+  if (ctx.tricksNeeded > 0) {
+    // Prefer off-suit masters (less likely to create extra bags than spade masters)
+    const offSuitMasters = offSuit.filter(c => isMasterCard(c, memory));
+    if (offSuitMasters.length > 0) {
+      return pickFromShortestSuit(offSuitMasters, hand);
+    }
+
+    // Lead master spades
+    const masterSpades = spades.filter(c => isMasterCard(c, memory));
+    if (masterSpades.length > 0) {
+      return masterSpades[0];
+    }
+  }
+
+  // If we've already secured enough tricks this round, switch to full duck mode
+  return leadInDuckMode(validCards, hand, ctx);
 }
 
 function leadInSetMode(validCards, hand, ctx) {
@@ -934,6 +988,19 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
 
   // --- Still need tricks to make bid ---
   if (ctx.needMore) {
+    // If we can guarantee bid, play disposition-aware even while "needing" tricks
+    if (ctx.canGuaranteeBid && winnerIsPartner) {
+      // Partner is winning — consolidate if ducking, or just duck
+      if (ctx.duckMode) {
+        // Consolidation: dump masters on partner's trick
+        const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
+        if (mastersInSuit.length > 0 && cardsOfSuit.length > mastersInSuit.length) {
+          return pickHighest(mastersInSuit);
+        }
+      }
+      return pickLowest(cardsOfSuit);
+    }
+
     // If partner is winning, generally let them have it
     if (winnerIsPartner) {
       const partnerPlay = currentTrick.find(t => t.playerId === ctx.partnerId);
@@ -954,6 +1021,13 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
       }
     }
 
+    // If we can guarantee bid and are in set mode, play like set mode
+    if (ctx.canGuaranteeBid && ctx.setMode) {
+      const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
+      if (beaters.length > 0) return pickLowest(beaters);
+      return pickLowest(cardsOfSuit);
+    }
+
     const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
     if (beaters.length > 0) {
       // If opponents are setting us, be willing to spend bigger cards to secure tricks
@@ -968,7 +1042,7 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
     return pickLowest(cardsOfSuit);
   }
 
-  // --- Bid is met: play based on disposition ---
+  // --- Bid is met (or guaranteed): play based on disposition ---
 
   if (ctx.setMode) {
     if (winnerIsPartner) {
@@ -989,6 +1063,16 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
 
   // DUCK MODE: avoid taking tricks (bag avoidance)
   if (winnerIsPartner) {
+    // CONSOLIDATION: if we have inevitable winners in this suit (master cards that
+    // will win future tricks no matter what), dump them here on partner's trick
+    // to avoid creating a separate bag later. E.g., play our master Q of diamonds
+    // on partner's already-won trick rather than leading it later for an extra bag.
+    const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
+    if (mastersInSuit.length > 0 && cardsOfSuit.length > mastersInSuit.length) {
+      // We have both masters and non-masters — dump the highest master
+      // (we still keep non-masters to avoid winning future tricks)
+      return pickHighest(mastersInSuit);
+    }
     return pickLowest(cardsOfSuit);
   }
   const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
@@ -1061,14 +1145,51 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
         if (beatingSpades.length > 0) return pickLowest(beatingSpades);
       }
     }
-    // Partner is winning — discard, don't trump them
+
+    // CONSOLIDATION: Partner is winning — dump inevitable winners here to avoid
+    // them creating extra bags later. E.g., toss Ace of spades on partner's
+    // already-won trick instead of winning a separate trick with it later.
+    if (ctx.duckMode || (ctx.canGuaranteeBid && ctx.disposition < 0)) {
+      // Dump master spades first (these are the biggest bag threats)
+      const masterSpades = spades.filter(c => isMasterCard(c, memory));
+      if (masterSpades.length > 0) {
+        return pickHighest(masterSpades);
+      }
+      // Dump any other inevitable off-suit winners
+      const masterNonSpade = nonSpade.filter(c => isMasterCard(c, memory));
+      if (masterNonSpade.length > 0) {
+        return pickHighest(masterNonSpade);
+      }
+    }
+
+    // Normal discard when partner is winning
     if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
     return pickLowest(hand);
   }
 
   // --- Still need tricks to make bid ---
   if (ctx.needMore) {
-    // Trump to win
+    // If we can guarantee bid and are in duck mode, don't trump — save spades
+    // and let our guaranteed winners handle the bid later
+    if (ctx.canGuaranteeBid && ctx.duckMode) {
+      if (nonSpade.length > 0) return pickHighest(nonSpade); // Dump high off-suit
+      return pickLowest(hand);
+    }
+
+    // If we can guarantee bid and are in set mode, trump aggressively
+    if (ctx.canGuaranteeBid && ctx.setMode) {
+      if (spades.length > 0 && ledSuit !== 'S') {
+        const currentHighTrump = currentTrick
+          .filter(t => t.card.suit === 'S')
+          .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
+        const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
+        if (beatingSpades.length > 0) return pickLowest(beatingSpades);
+      }
+      if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+      return pickLowest(hand);
+    }
+
+    // Normal: trump to win
     if (spades.length > 0 && ledSuit !== 'S') {
       const currentHighTrump = currentTrick
         .filter(t => t.card.suit === 'S')
