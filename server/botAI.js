@@ -196,18 +196,19 @@ function calculateDisposition(hand, ctx) {
     disposition += 1;
   }
 
-  // --- Partner signals (inferred from trick counts) ---
-  // If partner has taken way more than their share, they're playing aggressively (SET)
+  // --- Partner signals (inferred from trick counts AND card choices) ---
   if (ctx.partnerBid > 0) {
+    // Trick-count-based signals
     const partnerExcess = ctx.partnerTricks - ctx.partnerBid;
     if (partnerExcess >= 2) {
-      // Partner is taking lots of extra tricks - they're in set mode
       disposition += 1;
     } else if (partnerExcess < 0 && ctx.teamTricks >= ctx.teamBid) {
-      // Team made bid but partner is under their individual bid
-      // Bot is carrying - partner might be ducking
       disposition -= 0.5;
     }
+
+    // Card-choice-based signals: analyze HOW partner has been playing
+    const partnerSignal = readPartnerSignals(ctx);
+    disposition += partnerSignal;
   }
 
   // --- If we haven't made our own bid yet, disposition doesn't matter as much ---
@@ -215,6 +216,98 @@ function calculateDisposition(hand, ctx) {
   // But it still affects how aggressively we pursue tricks beyond our need
 
   return disposition;
+}
+
+// Read partner's card choices to infer their set/duck intent.
+// High leads = strength signal (set mode). Low leads = duck signal.
+// Trumping off-suit = aggressive (set). Discarding high = dumping (duck).
+function readPartnerSignals(ctx) {
+  const memory = ctx.memory;
+  if (!memory || memory.cardsPlayedCount === 0) return 0;
+
+  const cardsPlayed = [];
+  // Reconstruct which cards partner played from the memory's played cards
+  // We need the raw cardsPlayed from gameState — it's stored in memory context
+  // but not directly. We'll use the trick reconstruction approach.
+  const completedTricks = [];
+  const rawPlayed = ctx.rawCardsPlayed || [];
+  for (let i = 0; i < rawPlayed.length; i += 4) {
+    if (i + 3 < rawPlayed.length) {
+      completedTricks.push(rawPlayed.slice(i, i + 4));
+    }
+  }
+
+  let signal = 0;
+  let signalCount = 0;
+
+  for (const trick of completedTricks) {
+    const ledSuit = trick[0].card.suit;
+    const partnerPlay = trick.find(t => t.playerId === ctx.partnerId);
+    if (!partnerPlay) continue;
+
+    const partnerCard = partnerPlay.card;
+    const partnerLed = trick[0].playerId === ctx.partnerId;
+    const partnerVal = RANK_VALUE[partnerCard.rank];
+
+    if (partnerLed) {
+      // Partner LED this trick — their lead choice is a strong signal
+      if (partnerVal >= 13) {
+        // Led Ace or King — strength signal, likely set mode
+        signal += 0.5;
+        signalCount++;
+      } else if (partnerVal >= 11) {
+        // Led Q or J — moderate strength, could be set or making bid
+        signal += 0.2;
+        signalCount++;
+      } else if (partnerVal <= 7) {
+        // Led very low — duck signal, trying to lose the lead
+        signal -= 0.3;
+        signalCount++;
+      }
+    } else {
+      // Partner FOLLOWED — their follow choice is also a signal
+      if (partnerCard.suit !== ledSuit) {
+        // Partner couldn't follow suit
+        if (partnerCard.suit === 'S') {
+          // Trumped — aggressive, set signal
+          signal += 0.4;
+          signalCount++;
+        } else {
+          // Discarded off-suit
+          if (partnerVal >= 13) {
+            // Dumped an Ace or King off-suit — duck signal (shedding winners)
+            signal -= 0.5;
+            signalCount++;
+          } else if (partnerVal <= 5) {
+            // Dumped a low card — neutral/conservative
+            signal -= 0.1;
+            signalCount++;
+          }
+        }
+      } else {
+        // Followed suit
+        // Playing high when could play low = set signal
+        // Playing low when could play high = duck signal
+        // We can't see their hand, but playing high to win = set signal
+        const trickWinner = trick.reduce((winner, play) => {
+          const wVal = getEffectiveValue(winner.card, ledSuit);
+          const pVal = getEffectiveValue(play.card, ledSuit);
+          return pVal > wVal ? play : winner;
+        });
+        if (trickWinner.playerId === ctx.partnerId && partnerVal >= 12) {
+          // Partner won with a high card — set signal
+          signal += 0.3;
+          signalCount++;
+        }
+      }
+    }
+  }
+
+  // Normalize: don't let partner signal overwhelm other disposition factors
+  if (signalCount > 0) {
+    return Math.max(-1, Math.min(1, signal));
+  }
+  return 0;
 }
 
 function countGuaranteedWinners(hand, memory) {
@@ -486,6 +579,7 @@ export function botPlayCard(hand, gameState, botId) {
     botTricks, botBidVal, partnerId, players, botIndex,
     opp1Id, opp2Id, seatPosition, partnerBid, partnerTricks,
     memory,
+    rawCardsPlayed: gameState.cardsPlayed || [],
   };
 
   // Calculate our duck/set disposition
@@ -616,19 +710,19 @@ function leadToProtectNil(validCards, hand, ctx) {
       const safeMasters = masters.filter(c =>
         !isKnownVoid(ctx.partnerId, c.suit, memory)
       );
-      if (safeMasters.length > 0) return pickFromShortestSuit(safeMasters, hand);
-      return pickFromShortestSuit(masters, hand);
+      if (safeMasters.length > 0) return pickTopFromShortestSuit(safeMasters, hand);
+      return pickTopFromShortestSuit(masters, hand);
     }
 
-    // Lead high cards (aces, kings)
+    // Lead high cards (aces, kings) - highest first for signaling
     const aces = offSuit.filter(c => c.rank === 'A');
     if (aces.length > 0) {
-      return pickFromShortestSuit(aces, hand);
+      return pickTopFromShortestSuit(aces, hand);
     }
 
     const kings = offSuit.filter(c => c.rank === 'K');
     if (kings.length > 0) {
-      return pickFromShortestSuit(kings, hand);
+      return pickTopFromShortestSuit(kings, hand);
     }
 
     // Lead high cards from short suits
@@ -682,8 +776,8 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
     // Cash master cards immediately - these are guaranteed wins if not trumped
     const masters = offSuit.filter(c => isMasterCard(c, memory));
     if (masters.length > 0) {
-      // Lead master from shortest suit - least likely to be trumped
-      return pickFromShortestSuit(masters, hand);
+      // Lead highest master from shortest suit - signals strength to partner
+      return pickTopFromShortestSuit(masters, hand);
     }
 
     // Lead high spades early to pull opponent trumps before they ruff our winners
@@ -696,15 +790,15 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
   }
 
   // Lead master cards first - they're guaranteed winners in their suit
+  // Always lead HIGHEST master first (A before K before Q) to signal strength to partner
   const offSuitMasters = offSuit.filter(c => isMasterCard(c, memory));
   if (offSuitMasters.length > 0) {
-    // Prefer masters from shorter suits (less risk of being trumped)
-    return pickFromShortestSuit(offSuitMasters, hand);
+    return pickTopFromShortestSuit(offSuitMasters, hand);
   }
 
   // Lead Aces (always master anyway, but just in case)
   const aces = offSuit.filter(c => c.rank === 'A');
-  if (aces.length > 0) return pickRandom(aces);
+  if (aces.length > 0) return pickTopFromShortestSuit(aces, hand);
 
   // Lead Kings from suits where we have strength
   const groups = groupBySuit(offSuit);
@@ -764,7 +858,7 @@ function leadGuaranteedThenDuck(validCards, hand, ctx) {
     // Prefer off-suit masters (less likely to create extra bags than spade masters)
     const offSuitMasters = offSuit.filter(c => isMasterCard(c, memory));
     if (offSuitMasters.length > 0) {
-      return pickFromShortestSuit(offSuitMasters, hand);
+      return pickTopFromShortestSuit(offSuitMasters, hand);
     }
 
     // Lead master spades
@@ -792,9 +886,9 @@ function leadInSetMode(validCards, hand, ctx) {
     if (highSpades.length > 0) return highSpades[0];
   }
 
-  // Lead master off-suit cards - guaranteed winners
+  // Lead master off-suit cards - guaranteed winners (highest first for signaling)
   const masters = offSuit.filter(c => isMasterCard(c, memory));
-  if (masters.length > 0) return pickRandom(masters);
+  if (masters.length > 0) return pickTopFromShortestSuit(masters, hand);
 
   // Lead from suits where opponents are known void (forces them to trump or discard)
   if (offSuit.length > 0) {
@@ -990,7 +1084,7 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
   if (ctx.needMore) {
     // If we can guarantee bid, play disposition-aware even while "needing" tricks
     if (ctx.canGuaranteeBid && winnerIsPartner) {
-      // Partner is winning — consolidate if ducking, or just duck
+      // Partner is winning — consolidate if ducking, or signal disposition
       if (ctx.duckMode) {
         // Consolidation: dump masters on partner's trick
         const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
@@ -998,26 +1092,24 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
           return pickHighest(mastersInSuit);
         }
       }
-      return pickLowest(cardsOfSuit);
+      // Signal our disposition to partner
+      return signalWithFollow(cardsOfSuit, winningValue, ctx);
     }
 
-    // If partner is winning, generally let them have it
+    // If partner is winning, generally let them have it but signal intent
     if (winnerIsPartner) {
       const partnerPlay = currentTrick.find(t => t.playerId === ctx.partnerId);
       const partnerIsMaster = partnerPlay && isMasterCard(partnerPlay.card, memory);
 
-      // Last to play or partner has a strong card — definitely duck
+      // Last to play or partner has a strong card — duck and signal
       if (ctx.seatPosition === 3 && !ctx.compensateForPartner) {
-        return pickLowest(cardsOfSuit);
+        return signalWithFollow(cardsOfSuit, winningValue, ctx);
       }
-      // Partner's card is master or strong — duck
       if ((partnerIsMaster || winningValue >= RANK_VALUE['Q']) && !ctx.compensateForPartner) {
-        return pickLowest(cardsOfSuit);
+        return signalWithFollow(cardsOfSuit, winningValue, ctx);
       }
-      // Even if partner's card isn't great, prefer to duck rather than
-      // waste our own card overtaking partner
       if (!ctx.compensateForPartner) {
-        return pickLowest(cardsOfSuit);
+        return signalWithFollow(cardsOfSuit, winningValue, ctx);
       }
     }
 
@@ -1025,7 +1117,7 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
     if (ctx.canGuaranteeBid && ctx.setMode) {
       const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
       if (beaters.length > 0) return pickLowest(beaters);
-      return pickLowest(cardsOfSuit);
+      return signalWithFollow(cardsOfSuit, winningValue, ctx);
     }
 
     const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
@@ -1039,7 +1131,8 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
       }
       return pickLowest(beaters);
     }
-    return pickLowest(cardsOfSuit);
+    // Can't beat — signal disposition with the card we play
+    return signalWithFollow(cardsOfSuit, winningValue, ctx);
   }
 
   // --- Bid is met (or guaranteed): play based on disposition ---
@@ -1047,10 +1140,11 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
   if (ctx.setMode) {
     if (winnerIsPartner) {
       if (ctx.seatPosition === 3) {
-        return pickLowest(cardsOfSuit);
+        // Signal SET intent: play highest card we can afford under the winner
+        return signalWithFollow(cardsOfSuit, winningValue, ctx);
       }
       if (winningValue >= RANK_VALUE['J']) {
-        return pickLowest(cardsOfSuit);
+        return signalWithFollow(cardsOfSuit, winningValue, ctx);
       }
     }
 
@@ -1058,26 +1152,64 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
     if (beaters.length > 0) {
       return pickLowest(beaters);
     }
-    return pickLowest(cardsOfSuit);
+    return signalWithFollow(cardsOfSuit, winningValue, ctx);
   }
 
   // DUCK MODE: avoid taking tricks (bag avoidance)
   if (winnerIsPartner) {
     // CONSOLIDATION: if we have inevitable winners in this suit (master cards that
     // will win future tricks no matter what), dump them here on partner's trick
-    // to avoid creating a separate bag later. E.g., play our master Q of diamonds
-    // on partner's already-won trick rather than leading it later for an extra bag.
     const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
     if (mastersInSuit.length > 0 && cardsOfSuit.length > mastersInSuit.length) {
-      // We have both masters and non-masters — dump the highest master
-      // (we still keep non-masters to avoid winning future tricks)
       return pickHighest(mastersInSuit);
     }
-    return pickLowest(cardsOfSuit);
+    // Signal DUCK intent: play lowest
+    return signalWithFollow(cardsOfSuit, winningValue, ctx);
   }
   const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
-  if (underCards.length > 0) return pickHighest(underCards);
+  if (underCards.length > 0) {
+    // Signal disposition even when ducking under opponent's card
+    return signalDuck(underCards, ctx);
+  }
   return pickLowest(cardsOfSuit);
+}
+
+// Signal disposition through card choice when following suit and ducking.
+// High card under the winner = "I have strength, consider set mode"
+// Low card under the winner = "I'm ducking, avoid bags"
+// Middle cards are avoided (they waste range and send unclear signals).
+function signalWithFollow(cardsOfSuit, winningValue, ctx) {
+  const underCards = cardsOfSuit.filter(c => RANK_VALUE[c.rank] < winningValue);
+  const playableCards = underCards.length > 0 ? underCards : cardsOfSuit;
+
+  if (playableCards.length <= 1) return playableCards[0] || cardsOfSuit[0];
+
+  // Signal based on disposition
+  if (ctx.disposition > 0 || ctx.setMode) {
+    // SET signal: play highest affordable card under the winner
+    // This tells partner "I have strength in this suit, play aggressive"
+    return pickHighest(playableCards);
+  } else if (ctx.disposition < 0 || ctx.duckMode) {
+    // DUCK signal: play lowest card
+    // This tells partner "I'm ducking, don't count on me for extra tricks"
+    return pickLowest(playableCards);
+  }
+
+  // Neutral: play middle card (least informative, appropriate when undecided)
+  const middle = pickMiddleCard(playableCards);
+  return middle || pickLowest(playableCards);
+}
+
+// When we have multiple cards we could duck with, choose based on disposition signal.
+function signalDuck(underCards, ctx) {
+  if (underCards.length <= 1) return underCards[0];
+
+  if (ctx.disposition > 0 || ctx.setMode) {
+    // SET signal: play HIGH under the winner — shows strength
+    return pickHighest(underCards);
+  }
+  // DUCK signal: play lowest — shows we're not interested in this suit
+  return pickLowest(underCards);
 }
 
 function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx) {
@@ -1231,14 +1363,30 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
   return pickLowest(hand);
 }
 
-// Smart discard
+// Smart discard: preserve range (keep highs and lows), dump middle cards first.
+// Middle cards are the worst — they can't reliably win OR duck.
+// Keeping highs gives you set/win potential; keeping lows gives you duck potential.
 function dumpCard(candidates, hand, ctx) {
   if (!ctx.needMore && !ctx.setMode) {
-    // Duck mode: dump highest to get rid of future winners
-    return pickHighest(candidates);
+    // Duck mode: dump highest dangerous cards (future winners) to avoid bags
+    // But prefer dumping middle cards from long suits before dumping true high cards
+    // that could be useful for consolidation
+    const memory = ctx.memory;
+    const masters = candidates.filter(c => isMasterCard(c, memory));
+    const nonMasters = candidates.filter(c => !isMasterCard(c, memory));
+
+    // If we only have masters, dump the highest to get rid of inevitable bags
+    if (nonMasters.length === 0) return pickHighest(candidates);
+
+    // Dump middle cards first — preserve lows for ducking, preserve masters
+    // (masters might be useful for consolidation on partner's tricks later)
+    const middle = pickMiddleCard(nonMasters);
+    if (middle) return middle;
+    return pickHighest(nonMasters);
   }
 
   // Need tricks or set mode: dump from shortest suit to create voids for ruffing
+  // But within the suit, dump middle cards to preserve range
   const groups = groupBySuit(candidates);
   let shortestSuit = null;
   let shortestLen = 14;
@@ -1250,9 +1398,25 @@ function dumpCard(candidates, hand, ctx) {
     }
   }
   if (shortestSuit) {
-    return pickLowest(groups[shortestSuit]);
+    const suitCards = groups[shortestSuit];
+    if (suitCards.length === 1) return suitCards[0];
+    // Dump middle card from this suit to preserve high/low range
+    const middle = pickMiddleCard(suitCards);
+    if (middle) return middle;
+    return pickLowest(suitCards);
   }
   return pickLowest(candidates);
+}
+
+// Pick the most "middle" card — the card closest to the median rank value.
+// These are the least useful: can't reliably win (not high enough) or duck (not low enough).
+function pickMiddleCard(cards) {
+  if (cards.length <= 2) return null; // No middle to pick from
+
+  const sorted = [...cards].sort((a, b) => RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
+  // Skip the lowest and highest — return the one closest to the middle of the remaining
+  const middleIndex = Math.floor(sorted.length / 2);
+  return sorted[middleIndex];
 }
 
 // --- HELPERS ---
@@ -1333,4 +1497,32 @@ function pickFromShortestSuit(candidates, hand) {
     }
   }
   return best;
+}
+
+// Pick the top card from shortest suit among candidates.
+// When leading masters, always play the highest first (A before K before Q)
+// so partner can read our strength. If we lead Q, partner doesn't know we have A,K.
+function pickTopFromShortestSuit(candidates, hand) {
+  if (candidates.length === 1) return candidates[0];
+
+  // Group by suit and find shortest
+  const suitLens = {};
+  for (const c of candidates) {
+    if (!(c.suit in suitLens)) {
+      suitLens[c.suit] = hand.filter(h => h.suit === c.suit).length;
+    }
+  }
+
+  let shortestLen = 14;
+  let shortestSuit = candidates[0].suit;
+  for (const [suit, len] of Object.entries(suitLens)) {
+    if (len < shortestLen) {
+      shortestLen = len;
+      shortestSuit = suit;
+    }
+  }
+
+  // From the shortest suit, pick the HIGHEST card (top of sequence for signaling)
+  const fromSuit = candidates.filter(c => c.suit === shortestSuit);
+  return pickHighest(fromSuit);
 }
