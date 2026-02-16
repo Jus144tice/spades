@@ -468,3 +468,201 @@
 .bid-summary-item.overbid strong {
   color: var(--danger);
 }
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  .game-screen {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  /* Scoreboard */
+  .scoreboard {
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .score-team {
+    min-width: 90px;
+  }
+
+  .score-value {
+    font-size: 20px;
+  }
+
+  .score-team-name {
+    font-size: 11px;
+  }
+
+  .score-books, .score-bid-tracker, .score-remaining {
+    font-size: 10px;
+  }
+
+  .books-remaining-banner {
+    padding: 2px 10px;
+    margin: 4px 0 2px;
+  }
+
+  .books-remaining-number {
+    font-size: 16px;
+  }
+
+  .round-label {
+    font-size: 10px;
+  }
+
+  .score-history {
+    min-width: auto;
+    width: 90%;
+    padding: 16px;
+  }
+
+  .score-history table {
+    font-size: 11px;
+  }
+
+  .score-history th, .score-history td {
+    padding: 6px 4px;
+  }
+
+  /* Game Table — single column on mobile */
+  .game-table {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 4px;
+    gap: 4px;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .seat-top, .seat-left, .seat-right, .seat-bottom {
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    width: 100%;
+  }
+
+  .seat-top { order: 1; }
+  .seat-left { order: 2; }
+  .seat-right { order: 3; }
+  .trick-area { order: 4; width: 100%; }
+  .seat-bottom { order: 5; }
+
+  /* Opponents row — left and right side by side */
+  .seat-left, .seat-right {
+    display: inline-flex;
+    width: auto;
+  }
+
+  /* Player Seat */
+  .player-seat {
+    min-width: 100px;
+    padding: 6px 10px;
+    border-radius: 8px;
+  }
+
+  .player-seat-name {
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+
+  .player-bid-tricks {
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .bid-display, .tricks-display {
+    padding: 1px 6px;
+    min-width: 34px;
+  }
+
+  .bid-tricks-label {
+    font-size: 8px;
+  }
+
+  .bid-tricks-value {
+    font-size: 14px;
+  }
+
+  .dealer-chip-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+
+  .turn-text {
+    font-size: 9px;
+  }
+
+  .turn-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .team-badge {
+    font-size: 8px;
+    padding: 1px 4px;
+    top: -6px;
+    right: -6px;
+  }
+
+  /* Trick Area */
+  .trick-area {
+    min-height: 140px;
+    position: relative;
+  }
+
+  .trick-bottom { bottom: 5px; }
+  .trick-top { top: 5px; }
+  .trick-left { left: 15%; }
+  .trick-right { right: 15%; }
+
+  .trick-empty {
+    width: 56px;
+    height: 78px;
+  }
+
+  /* Bid Panel */
+  .bid-panel {
+    padding: 12px 12px;
+  }
+
+  .bid-panel h3 {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .bid-options {
+    gap: 8px;
+  }
+
+  .bid-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+    border-radius: 10px;
+  }
+
+  .bid-btn.nil-btn {
+    padding: 0 14px;
+    height: 48px;
+  }
+
+  .waiting-bid {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .bid-summary {
+    font-size: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .bid-summary strong {
+    font-size: 14px;
+  }
+}

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Card from './Card.jsx';
 
 export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken }) {
+  const [touchedIndex, setTouchedIndex] = useState(null);
+
   const canPlayCard = (card) => {
     if (!isMyTurn) return false;
 
@@ -21,6 +23,18 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
     return true;
   };
 
+  const handleTouch = (card, index, playable) => {
+    if (!playable) return;
+    if (touchedIndex === index) {
+      // Second tap — play the card
+      onPlayCard(card);
+      setTouchedIndex(null);
+    } else {
+      // First tap — lift the card
+      setTouchedIndex(index);
+    }
+  };
+
   return (
     <div className="hand">
       {cards.map((card, i) => {
@@ -28,8 +42,12 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
         return (
           <div
             key={`${card.suit}${card.rank}`}
-            className={`hand-card ${playable ? 'playable' : ''}`}
+            className={`hand-card ${playable ? 'playable' : ''} ${touchedIndex === i ? 'touched' : ''}`}
             style={{ '--i': i, '--total': cards.length }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              handleTouch(card, i, playable);
+            }}
           >
             <Card
               card={card}

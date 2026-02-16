@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useGame } from './context/GameContext.jsx';
 import JoinScreen from './screens/JoinScreen.jsx';
@@ -28,6 +28,7 @@ function LoginScreen() {
 export default function App() {
   const { user, loading } = useAuth();
   const { state } = useGame();
+  const [chatOpen, setChatOpen] = useState(false);
 
   if (loading) {
     return (
@@ -52,9 +53,18 @@ export default function App() {
         {state.screen === 'game' && <GameScreen />}
       </div>
       {state.screen !== 'join' && (
-        <div className="app-chat">
-          <Chat />
-        </div>
+        <>
+          <div className={`app-chat ${chatOpen ? 'chat-open' : ''}`}>
+            <Chat />
+          </div>
+          <button
+            className="chat-toggle-btn"
+            onClick={() => setChatOpen(prev => !prev)}
+            aria-label="Toggle chat"
+          >
+            {chatOpen ? '\u2715' : '\uD83D\uDCAC'}
+          </button>
+        </>
       )}
       <ErrorToast />
     </div>

@@ -131,3 +131,88 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  .card {
+    width: 48px;
+    height: 67px;
+    border-radius: 6px;
+  }
+
+  .card-small {
+    width: 40px;
+    height: 56px;
+  }
+
+  .card-rank {
+    font-size: 11px;
+  }
+
+  .card-suit {
+    font-size: 9px;
+  }
+
+  .card-small .card-rank {
+    font-size: 9px;
+  }
+
+  .card-small .card-suit {
+    font-size: 8px;
+  }
+
+  .card-center {
+    font-size: 18px;
+  }
+
+  .card-small .card-center {
+    font-size: 14px;
+  }
+
+  .card-back::after {
+    font-size: 16px;
+  }
+
+  .top-left {
+    top: 2px;
+    left: 4px;
+  }
+
+  .bottom-right {
+    bottom: 2px;
+    right: 4px;
+  }
+
+  /* Hand layout — tighter overlap for mobile */
+  .hand {
+    padding: 6px 8px 10px;
+    gap: 0;
+  }
+
+  .hand-card {
+    margin: 0 -8px;
+  }
+
+  /* Disable hover lift on touch devices */
+  .hand-card.playable:hover {
+    transform: none;
+    z-index: auto;
+  }
+
+  /* Active/tapped state for touch */
+  .hand-card.playable:active,
+  .hand-card.playable.touched {
+    transform: translateY(-14px);
+    z-index: 10;
+  }
+
+  .card-playable:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  .card-playable:active {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+}

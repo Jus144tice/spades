@@ -409,3 +409,93 @@ body {
   color: var(--text-secondary);
   margin-left: auto;
 }
+
+/* Mobile chat toggle button */
+.chat-toggle-btn {
+  display: none;
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 90;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  body {
+    overflow: auto;
+  }
+
+  .app {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .app-main {
+    flex: 1;
+    overflow-y: visible;
+  }
+
+  .app-chat {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 50vh;
+    z-index: 80;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+  }
+
+  .app-chat.chat-open {
+    transform: translateY(0);
+  }
+
+  .chat-toggle-btn {
+    display: flex;
+  }
+
+  .modal {
+    padding: 20px 16px;
+    max-width: 95%;
+    border-radius: 12px;
+  }
+
+  .modal h2 {
+    font-size: 18px;
+    margin-bottom: 14px;
+  }
+
+  .round-summary-modal {
+    max-width: 95%;
+  }
+
+  .summary-section {
+    padding: 12px;
+  }
+
+  .summary-total-value {
+    font-size: 18px;
+  }
+
+  .error-toast {
+    bottom: 72px;
+    font-size: 13px;
+    padding: 10px 18px;
+  }
+}
