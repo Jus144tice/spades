@@ -42,7 +42,7 @@ export default function Scoreboard() {
       <div className="score-team">
         <div className="score-team-name">{team1Names}</div>
         <div className="score-value">{state.scores.team1}</div>
-        <div className="score-books">{state.books.team1} bags</div>
+        <div className="score-books">{state.books.team1} books</div>
         {allBidsIn && (
           <div className="score-bid-tracker">
             Bid {team1Bid} &middot; Took {team1Tricks}/{team1Bid}
@@ -73,7 +73,7 @@ export default function Scoreboard() {
       <div className="score-team">
         <div className="score-team-name">{team2Names}</div>
         <div className="score-value">{state.scores.team2}</div>
-        <div className="score-books">{state.books.team2} bags</div>
+        <div className="score-books">{state.books.team2} books</div>
         {allBidsIn && (
           <div className="score-bid-tracker">
             Bid {team2Bid} &middot; Took {team2Tricks}/{team2Bid}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGame } from '../context/GameContext.jsx';
+import { useSocket } from '../context/SocketContext.jsx';
 
 const NIL_BONUS = 100;
 const TEN_TRICK_BONUS = 50;
@@ -8,6 +9,7 @@ const BOOK_PENALTY = 100;
 
 export default function RoundSummaryModal() {
   const { state, dispatch } = useGame();
+  const socket = useSocket();
   const summary = state.roundSummary;
   if (!summary) return null;
 
@@ -17,8 +19,13 @@ export default function RoundSummaryModal() {
   const team1Analysis = analyzeTeam(team1Players, summary, 'team1');
   const team2Analysis = analyzeTeam(team2Players, summary, 'team2');
 
+  const handleContinue = () => {
+    dispatch({ type: 'CLEAR_ROUND_SUMMARY' });
+    socket.emit('ready_for_next_round');
+  };
+
   return (
-    <div className="modal-overlay" onClick={() => dispatch({ type: 'CLEAR_ROUND_SUMMARY' })}>
+    <div className="modal-overlay" onClick={handleContinue}>
       <div className="modal round-summary-modal" onClick={e => e.stopPropagation()}>
         <h2>Round {summary.roundNumber} Results</h2>
 
@@ -42,7 +49,7 @@ export default function RoundSummaryModal() {
           bags={summary.team2Books}
         />
 
-        <button className="btn btn-primary" onClick={() => dispatch({ type: 'CLEAR_ROUND_SUMMARY' })}>
+        <button className="btn btn-primary" onClick={handleContinue}>
           Continue
         </button>
       </div>

@@ -21,6 +21,7 @@ export class GameState {
     this.roundNumber = 0;
     this.roundHistory = [];
     this.tricksPlayed = 0;
+    this.cardsPlayed = []; // All cards played this round (for bot card memory)
 
     this.startNewRound();
   }
@@ -33,6 +34,7 @@ export class GameState {
     this.currentTrick = [];
     this.spadesBroken = false;
     this.tricksPlayed = 0;
+    this.cardsPlayed = [];
 
     for (const p of this.players) {
       this.tricksTaken[p.id] = 0;
@@ -125,6 +127,10 @@ export class GameState {
       this.tricksPlayed++;
 
       const completedTrick = [...this.currentTrick];
+      // Record all cards from this trick for card memory
+      for (const play of completedTrick) {
+        this.cardsPlayed.push({ playerId: play.playerId, card: play.card });
+      }
       this.currentTrick = [];
 
       // All 13 tricks done?

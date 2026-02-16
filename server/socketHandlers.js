@@ -248,6 +248,37 @@ export function registerHandlers(io, socket) {
     processCardPlay(io, info.lobbyCode, socket.id, card);
   });
 
+  socket.on('ready_for_next_round', () => {
+    const info = getPlayerInfo(socket.id);
+    if (!info) return;
+
+    const lobby = getLobby(info.lobbyCode);
+    if (!lobby || !lobby.game || !lobby.readyForNextRound) return;
+
+    lobby.readyForNextRound.add(socket.id);
+
+    // Check if all human players are ready
+    const humanPlayers = lobby.game.players.filter(p => !p.isBot);
+    const allReady = humanPlayers.every(p => lobby.readyForNextRound.has(p.id));
+
+    if (allReady) {
+      lobby.readyForNextRound = null;
+      lobby.game.startNewRound();
+
+      for (const player of lobby.game.players) {
+        if (!player.isBot) {
+          const state = lobby.game.getStateForPlayer(player.id);
+          io.to(player.id).emit('new_round', state);
+        }
+      }
+
+      const msg = addChatMessage(info.lobbyCode, null, `Round ${lobby.game.roundNumber} - Deal 'em up!`);
+      io.to(info.lobbyCode).emit('chat_message', msg);
+
+      scheduleBotTurn(io, info.lobbyCode);
+    }
+  });
+
   socket.on('return_to_lobby', () => {
     const info = getPlayerInfo(socket.id);
     if (!info) return;
@@ -329,16 +360,8 @@ function processCardPlay(io, lobbyCode, playerId, card) {
 
         return; // No more bot turns needed
       } else {
-        lobby.game.startNewRound();
-        for (const player of lobby.game.players) {
-          if (!player.isBot) {
-            const state = lobby.game.getStateForPlayer(player.id);
-            io.to(player.id).emit('new_round', state);
-          }
-        }
-
-        const msg = addChatMessage(lobbyCode, null, `Round ${lobby.game.roundNumber} - Deal 'em up!`);
-        io.to(lobbyCode).emit('chat_message', msg);
+        // Wait for human players to dismiss the round summary before starting next round
+        lobby.readyForNextRound = new Set();
       }
     }
 
@@ -423,6 +446,7 @@ function executeBotTurn(io, lobbyCode, botId) {
       tricksTaken: game.tricksTaken,
       players: game.players,
       spadesBroken: game.spadesBroken,
+      cardsPlayed: game.cardsPlayed,
     };
 
     const card = botPlayCard(hand, gameStateForBot, botId);

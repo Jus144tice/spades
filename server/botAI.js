@@ -188,7 +188,7 @@ function calculateDisposition(hand, ctx) {
   }
 
   // --- Project guaranteed future winners (bags we know are coming) ---
-  const guaranteedFutureWins = countGuaranteedWinners(hand);
+  const guaranteedFutureWins = countGuaranteedWinners(hand, ctx.memory);
   const projectedBags = teamBags + guaranteedFutureWins;
   if (ctx.teamTricks >= ctx.teamBid && projectedBags >= 2) {
     // We've made our bid and have guaranteed future bags coming
@@ -217,28 +217,55 @@ function calculateDisposition(hand, ctx) {
   return disposition;
 }
 
-function countGuaranteedWinners(hand) {
+function countGuaranteedWinners(hand, memory) {
   let count = 0;
-  const spades = hand.filter(c => c.suit === 'S')
-    .sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
 
-  // Ace of spades is always a winner
-  if (spades.length > 0 && RANK_VALUE[spades[0].rank] === 14) {
-    count++;
-    // King of spades behind Ace is also guaranteed
-    if (spades.length > 1 && RANK_VALUE[spades[1].rank] === 13) {
-      count++;
+  if (memory) {
+    // With card memory: count all master cards (highest remaining in their suit)
+    const spades = hand.filter(c => c.suit === 'S')
+      .sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+
+    // Count consecutive master spades (each one is guaranteed)
+    for (const s of spades) {
+      if (isMasterCard(s, memory)) {
+        count++;
+      } else {
+        break; // Once we hit a non-master, the rest aren't guaranteed either
+      }
     }
-  }
 
-  // Off-suit Aces are near-guaranteed (could be trumped, but usually win)
-  for (const suit of ['H', 'D', 'C']) {
-    const suitCards = hand.filter(c => c.suit === suit);
-    if (suitCards.length > 0) {
-      const highest = suitCards.reduce((best, c) =>
-        RANK_VALUE[c.rank] > RANK_VALUE[best.rank] ? c : best
-      );
-      if (RANK_VALUE[highest.rank] === 14) count += 0.7; // might get trumped
+    // Off-suit masters
+    for (const suit of ['H', 'D', 'C']) {
+      const suitCards = hand.filter(c => c.suit === suit)
+        .sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+      for (const c of suitCards) {
+        if (isMasterCard(c, memory)) {
+          count += 0.7; // Off-suit masters can still be trumped
+        } else {
+          break;
+        }
+      }
+    }
+  } else {
+    // Without memory (e.g., during bidding): use static analysis
+    const spades = hand.filter(c => c.suit === 'S')
+      .sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+
+    if (spades.length > 0 && RANK_VALUE[spades[0].rank] === 14) {
+      count++;
+      if (spades.length > 1 && RANK_VALUE[spades[1].rank] === 13) {
+        count++;
+      }
+    }
+
+    for (const suit of ['H', 'D', 'C']) {
+      const suitCards = hand.filter(c => c.suit === suit);
+      if (suitCards.length > 0) {
+        const highest = suitCards.reduce((best, c) =>
+          RANK_VALUE[c.rank] > RANK_VALUE[best.rank] ? c : best
+        );
+        if (RANK_VALUE[highest.rank] === 14) count += 0.7;
+      }
     }
   }
 
@@ -316,6 +343,109 @@ function estimateOpponentDisposition(currentTrick, ctx) {
   return oppDisp;
 }
 
+// --- CARD MEMORY ---
+// Analyzes all previously played cards to determine what's still outstanding
+
+function buildCardMemory(hand, gameState, botId) {
+  const cardsPlayed = gameState.cardsPlayed || [];
+  const currentTrick = gameState.currentTrick || [];
+
+  // All cards visible to this bot: own hand + played cards + current trick
+  const allSeen = new Set();
+  for (const c of hand) allSeen.add(`${c.rank}_${c.suit}`);
+  for (const p of cardsPlayed) allSeen.add(`${p.card.rank}_${p.card.suit}`);
+  for (const p of currentTrick) allSeen.add(`${p.card.rank}_${p.card.suit}`);
+
+  // Build full deck reference
+  const suits = ['S', 'H', 'D', 'C'];
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
+  // Cards still outstanding (not in hand, not played)
+  const outstanding = {}; // suit -> [cards] sorted high to low
+  for (const suit of suits) {
+    outstanding[suit] = [];
+    for (const rank of ranks) {
+      const key = `${rank}_${suit}`;
+      if (!allSeen.has(key)) {
+        outstanding[suit].push({ rank, suit });
+      }
+    }
+    outstanding[suit].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+  }
+
+  // Highest remaining card per suit (among outstanding cards only - cards we don't control)
+  const highestOutstanding = {};
+  for (const suit of suits) {
+    highestOutstanding[suit] = outstanding[suit].length > 0
+      ? RANK_VALUE[outstanding[suit][0].rank]
+      : 0;
+  }
+
+  // Track which players are known to be void in a suit
+  const knownVoids = {}; // playerId -> Set of suits they're void in
+  for (const play of cardsPlayed) {
+    if (!knownVoids[play.playerId]) knownVoids[play.playerId] = new Set();
+  }
+  for (const play of currentTrick) {
+    if (!knownVoids[play.playerId]) knownVoids[play.playerId] = new Set();
+  }
+
+  // Analyze completed tricks to detect voids
+  // cardsPlayed is a flat array; we need to reconstruct tricks (groups of 4)
+  const completedTricks = [];
+  for (let i = 0; i < cardsPlayed.length; i += 4) {
+    if (i + 3 < cardsPlayed.length) {
+      completedTricks.push(cardsPlayed.slice(i, i + 4));
+    }
+  }
+
+  for (const trick of completedTricks) {
+    if (trick.length < 2) continue;
+    const ledSuit = trick[0].card.suit;
+    for (let i = 1; i < trick.length; i++) {
+      if (trick[i].card.suit !== ledSuit) {
+        // This player didn't follow suit — they're void
+        if (!knownVoids[trick[i].playerId]) knownVoids[trick[i].playerId] = new Set();
+        knownVoids[trick[i].playerId].add(ledSuit);
+      }
+    }
+  }
+
+  // Also check current trick for voids
+  if (currentTrick.length >= 2) {
+    const ledSuit = currentTrick[0].card.suit;
+    for (let i = 1; i < currentTrick.length; i++) {
+      if (currentTrick[i].card.suit !== ledSuit) {
+        if (!knownVoids[currentTrick[i].playerId]) knownVoids[currentTrick[i].playerId] = new Set();
+        knownVoids[currentTrick[i].playerId].add(ledSuit);
+      }
+    }
+  }
+
+  return {
+    outstanding,       // suit -> remaining unseen cards (sorted high to low)
+    highestOutstanding, // suit -> highest rank value still out there
+    knownVoids,        // playerId -> Set of void suits
+    cardsPlayedCount: cardsPlayed.length + currentTrick.length,
+  };
+}
+
+// Check if a card in hand is the highest remaining (master) in its suit
+function isMasterCard(card, memory) {
+  // A card is "master" if no outstanding card in that suit is higher
+  return RANK_VALUE[card.rank] > memory.highestOutstanding[card.suit];
+}
+
+// Count how many cards of a suit are still outstanding
+function outstandingInSuit(suit, memory) {
+  return memory.outstanding[suit].length;
+}
+
+// Check if a specific opponent is known void in a suit
+function isKnownVoid(playerId, suit, memory) {
+  return memory.knownVoids[playerId] && memory.knownVoids[playerId].has(suit);
+}
+
 // --- CARD PLAY ---
 
 export function botPlayCard(hand, gameState, botId) {
@@ -347,11 +477,15 @@ export function botPlayCard(hand, gameState, botId) {
   const opp2IsNil = opp2Bid === 0;
   const seatPosition = currentTrick.length;
 
+  // Build card memory from played cards
+  const memory = buildCardMemory(hand, gameState, botId);
+
   const ctx = {
     needMore, tricksNeeded, partnerIsNil, botIsNil, spadesBroken,
     opp1IsNil, opp2IsNil, teamTricks, teamBid, oppTricks, oppBid,
     botTricks, botBidVal, partnerId, players, botIndex,
     opp1Id, opp2Id, seatPosition, partnerBid, partnerTricks,
+    memory,
   };
 
   // Calculate our duck/set disposition
@@ -499,15 +633,16 @@ function leadToBustNil(validCards, ctx) {
 function leadWhenNeedingTricks(validCards, hand, ctx) {
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
+  const memory = ctx.memory;
 
   // If opponents are setting us (urgentBid) or we need to compensate for partner,
   // prioritize cashing guaranteed winners before they get trumped
   if (ctx.urgentBid || ctx.compensateForPartner) {
-    // Cash aces immediately - don't risk them getting trumped
-    const aces = offSuit.filter(c => c.rank === 'A');
-    if (aces.length > 0) {
-      // Lead ace from shortest suit - most likely to cash before opponents void out
-      return pickFromShortestSuit(aces, hand);
+    // Cash master cards immediately - these are guaranteed wins if not trumped
+    const masters = offSuit.filter(c => isMasterCard(c, memory));
+    if (masters.length > 0) {
+      // Lead master from shortest suit - least likely to be trumped
+      return pickFromShortestSuit(masters, hand);
     }
 
     // Lead high spades early to pull opponent trumps before they ruff our winners
@@ -519,7 +654,14 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
     }
   }
 
-  // Lead Aces first
+  // Lead master cards first - they're guaranteed winners in their suit
+  const offSuitMasters = offSuit.filter(c => isMasterCard(c, memory));
+  if (offSuitMasters.length > 0) {
+    // Prefer masters from shorter suits (less risk of being trumped)
+    return pickFromShortestSuit(offSuitMasters, hand);
+  }
+
+  // Lead Aces (always master anyway, but just in case)
   const aces = offSuit.filter(c => c.rank === 'A');
   if (aces.length > 0) return pickRandom(aces);
 
@@ -538,8 +680,10 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
     }
   }
 
-  // Lead high spades
+  // Lead master spades
   if (spades.length > 0) {
+    const masterSpades = spades.filter(c => isMasterCard(c, memory));
+    if (masterSpades.length > 0) return masterSpades[0];
     const highSpades = spades.filter(c => RANK_VALUE[c.rank] >= 13);
     if (highSpades.length > 0) {
       return highSpades[0];
@@ -568,28 +712,36 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
 
 function leadInSetMode(validCards, hand, ctx) {
   // SET MODE: We've made our bid but want to take tricks from opponents.
-  // Lead strong cards to steal tricks opponents are counting on.
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
+  const memory = ctx.memory;
 
-  // Lead high spades to pull opponent trumps - this is devastating in set mode
-  // because it strips their ruffing ability
+  // Lead master spades to pull opponent trumps
   if (spades.length > 0) {
+    const masterSpades = spades.filter(c => isMasterCard(c, memory));
+    if (masterSpades.length > 0) return masterSpades[0];
     const highSpades = spades.filter(c => RANK_VALUE[c.rank] >= 12);
-    if (highSpades.length > 0) {
-      return highSpades[0]; // Lead A, K, or Q of spades
+    if (highSpades.length > 0) return highSpades[0];
+  }
+
+  // Lead master off-suit cards - guaranteed winners
+  const masters = offSuit.filter(c => isMasterCard(c, memory));
+  if (masters.length > 0) return pickRandom(masters);
+
+  // Lead from suits where opponents are known void (forces them to trump or discard)
+  if (offSuit.length > 0) {
+    const groups = groupBySuit(offSuit);
+    for (const [suit, cards] of Object.entries(groups)) {
+      const opp1Void = isKnownVoid(ctx.opp1Id, suit, memory);
+      const opp2Void = isKnownVoid(ctx.opp2Id, suit, memory);
+      // If an opponent is void, leading this suit forces them to trump or give up
+      if ((opp1Void || opp2Void) && cards.length > 0) {
+        return pickHighest(cards);
+      }
     }
   }
 
-  // Lead Aces to grab tricks
-  const aces = offSuit.filter(c => c.rank === 'A');
-  if (aces.length > 0) return pickRandom(aces);
-
-  // Lead Kings
-  const kings = offSuit.filter(c => c.rank === 'K');
-  if (kings.length > 0) return pickRandom(kings);
-
-  // Lead from short suits - if we can void, we can trump opponent winners later
+  // Lead from short suits to create voids for future ruffing
   if (offSuit.length > 0) {
     const groups = groupBySuit(offSuit);
     let shortestSuit = null;
@@ -602,9 +754,8 @@ function leadInSetMode(validCards, hand, ctx) {
       }
     }
     if (shortestSuit && shortestLen <= 2) {
-      return pickLowest(groups[shortestSuit]); // Void the short suit
+      return pickLowest(groups[shortestSuit]);
     }
-    // Lead highest available
     return pickHighest(offSuit);
   }
 
@@ -614,23 +765,28 @@ function leadInSetMode(validCards, hand, ctx) {
 function leadInDuckMode(validCards, hand, ctx) {
   // DUCK MODE: We've made our bid, avoid taking extra tricks (bags).
   const offSuit = validCards.filter(c => c.suit !== 'S');
+  const memory = ctx.memory;
 
   if (offSuit.length > 0) {
-    // Lead low from shortest off-suit to give up the lead
-    const groups = groupBySuit(offSuit);
-    let shortestSuit = null;
-    let shortestLen = 14;
+    // Avoid leading master cards - they'll win and give us bags
+    const nonMasters = offSuit.filter(c => !isMasterCard(c, memory));
+    const candidates = nonMasters.length > 0 ? nonMasters : offSuit;
+
+    // Lead low from longest suit (opponents less likely to be void → won't trump)
+    const groups = groupBySuit(candidates);
+    let bestSuit = null;
+    let bestLen = -1;
     for (const [suit, cards] of Object.entries(groups)) {
       const suitLen = hand.filter(c => c.suit === suit).length;
-      if (suitLen < shortestLen) {
-        shortestLen = suitLen;
-        shortestSuit = suit;
+      if (suitLen > bestLen) {
+        bestLen = suitLen;
+        bestSuit = suit;
       }
     }
-    if (shortestSuit) {
-      return pickLowest(groups[shortestSuit]);
+    if (bestSuit) {
+      return pickLowest(groups[bestSuit]);
     }
-    return pickLowest(offSuit);
+    return pickLowest(candidates);
   }
 
   return pickLowest(validCards);
@@ -752,18 +908,21 @@ function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCar
 }
 
 function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx) {
+  const memory = ctx.memory;
+
   // --- Still need tricks to make bid ---
   if (ctx.needMore) {
-    // If partner is winning, usually let them have it
+    // If partner is winning with a master card, definitely let them have it
     if (winnerIsPartner && ctx.seatPosition === 3) {
-      // Exception: if we need to compensate for partner AND partner is behind,
-      // we should still try to win so partner can save their remaining tricks
       if (!ctx.compensateForPartner) {
         return pickLowest(cardsOfSuit);
       }
     }
     if (winnerIsPartner && ctx.seatPosition === 2) {
-      if (winningValue >= RANK_VALUE['Q'] && !ctx.compensateForPartner) {
+      // Check if partner's card is master (highest remaining) - safe to duck
+      const partnerPlay = currentTrick.find(t => t.playerId === ctx.partnerId);
+      const partnerIsMaster = partnerPlay && isMasterCard(partnerPlay.card, memory);
+      if ((partnerIsMaster || winningValue >= RANK_VALUE['Q']) && !ctx.compensateForPartner) {
         return pickLowest(cardsOfSuit);
       }
     }
@@ -772,11 +931,9 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
     if (beaters.length > 0) {
       // If opponents are setting us, be willing to spend bigger cards to secure tricks
       if (ctx.urgentBid && ctx.seatPosition <= 1) {
-        // Early in the trick and under pressure - play strong to ensure the win
-        // (opponent behind us might trump if we play just barely over)
         const safeBeaters = beaters.filter(c => getEffectiveValue(c, ledSuit) >= RANK_VALUE['Q']);
         if (safeBeaters.length > 0 && beaters.length > 1) {
-          return pickLowest(safeBeaters); // Win with authority but don't waste top card
+          return pickLowest(safeBeaters);
         }
       }
       return pickLowest(beaters);
@@ -787,7 +944,6 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
   // --- Bid is met: play based on disposition ---
 
   if (ctx.setMode) {
-    // SET MODE: try to win tricks to prevent opponents from making their bid
     if (winnerIsPartner) {
       if (ctx.seatPosition === 3) {
         return pickLowest(cardsOfSuit);
@@ -797,7 +953,6 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
       }
     }
 
-    // An opponent is currently winning - try to take the trick from them
     const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
     if (beaters.length > 0) {
       return pickLowest(beaters);
@@ -806,7 +961,6 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
   }
 
   // DUCK MODE: avoid taking tricks (bag avoidance)
-  // If opponents are also ducking, duck even harder - nobody wants these tricks
   if (winnerIsPartner) {
     return pickLowest(cardsOfSuit);
   }
@@ -818,15 +972,17 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
 function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartner, currentTrick, ctx) {
   const spades = hand.filter(c => c.suit === 'S');
   const nonSpade = nonSuitCards.filter(c => c.suit !== 'S');
+  const memory = ctx.memory;
+
+  // Check if the winning card is already the master (highest remaining) in the led suit
+  const currentWinner = getCurrentWinner(currentTrick);
+  const winningCardIsMaster = isMasterCard(currentWinner.card, memory);
 
   // --- Still need tricks to make bid ---
   if (ctx.needMore) {
-    // If partner is winning, usually don't override - unless opponents are
-    // setting us and partner's winning card looks vulnerable to a later trump
     if (winnerIsPartner && ctx.seatPosition >= 2) {
-      if (ctx.urgentBid && ctx.seatPosition === 2 && winningValue < RANK_VALUE['K']) {
-        // Partner's card is weak and opponent plays last - they might trump.
-        // Secure the trick ourselves with a trump if possible
+      if (ctx.urgentBid && ctx.seatPosition === 2 && !winningCardIsMaster) {
+        // Partner's card is NOT master and opponent plays last - they might beat it
         if (spades.length > 0 && ledSuit !== 'S') {
           const currentHighTrump = currentTrick
             .filter(t => t.card.suit === 'S')
@@ -835,6 +991,13 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
           if (beatingSpades.length > 0) return pickLowest(beatingSpades);
         }
       }
+      if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+      return pickLowest(hand);
+    }
+
+    // Don't waste a trump on a card we know is already the master
+    // (e.g., player leads Q of diamonds after A and K have been played)
+    if (winningCardIsMaster && winnerIsPartner) {
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
       return pickLowest(hand);
     }
@@ -855,14 +1018,18 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
   // --- Bid is met: play based on disposition ---
 
   if (ctx.setMode) {
-    // SET MODE: aggressively trump to steal tricks from opponents
     if (winnerIsPartner) {
-      // Partner is winning - don't override them, discard instead
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
       return pickLowest(hand);
     }
 
-    // Opponent is winning - trump them to set
+    // Don't trump a master card - it's going to win anyway, save the spade
+    if (winningCardIsMaster) {
+      if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+      return pickLowest(hand);
+    }
+
+    // Opponent is winning with a non-master - trump them to set
     if (spades.length > 0 && ledSuit !== 'S') {
       const currentHighTrump = currentTrick
         .filter(t => t.card.suit === 'S')
@@ -871,14 +1038,13 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
       if (beatingSpades.length > 0) return pickLowest(beatingSpades);
     }
 
-    // Can't trump - discard
     if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
     return pickLowest(hand);
   }
 
   // DUCK MODE: dump dangerous high cards, avoid trumping
   if (nonSpade.length > 0) {
-    return pickHighest(nonSpade); // Dump highest off-suit to shed dangerous winners
+    return pickHighest(nonSpade);
   }
   return pickLowest(hand);
 }
