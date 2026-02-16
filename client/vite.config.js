@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    allowedHosts: true,
     proxy: {
       '/socket.io': {
         target: 'http://localhost:3001',
@@ -12,6 +13,8 @@ export default defineConfig({
       },
       '/auth': {
         target: 'http://localhost:3001',
+        changeOrigin: false,
+        xfwd: true,
       },
       '/api': {
         target: 'http://localhost:3001',

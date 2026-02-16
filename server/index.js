@@ -13,6 +13,7 @@ import { registerHandlers } from './socketHandlers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.set('trust proxy', 1);
 const server = createServer(app);
 
 // --- Session setup ---
@@ -37,7 +38,8 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: 'http://localhost:3000/auth/google/callback',
+  callbackURL: '/auth/google/callback',
+  proxy: true,
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     const googleId = profile.id;
@@ -140,7 +142,7 @@ app.get('/api/stats/:userId', async (req, res) => {
 // --- Socket.io ---
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
+    origin: true,
     methods: ['GET', 'POST'],
     credentials: true,
   },
