@@ -110,7 +110,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
         ))}
         {analysis.overtricks > 0 && (
           <div className="breakdown-line">
-            <span>Bags (+{analysis.overtricks})</span>
+            <span>Books (+{analysis.overtricks})</span>
             <span className="bags">+{analysis.overtricks}</span>
           </div>
         )}
@@ -122,7 +122,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
         )}
         {analysis.bagPenalty > 0 && (
           <div className="breakdown-line penalty-line">
-            <span>Bag Penalty (10 bags)</span>
+            <span>Book Penalty (10 books)</span>
             <span className="negative">-{analysis.bagPenalty}</span>
           </div>
         )}
@@ -138,7 +138,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
       <div className="summary-total-row">
         <span className="summary-total-label">Total Score</span>
         <span className="summary-total-value">{total}</span>
-        <span className="summary-bags-count">{bags} bags</span>
+        <span className="summary-bags-count">{bags} books</span>
       </div>
     </div>
   );

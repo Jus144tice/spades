@@ -578,8 +578,22 @@ function leadAsNil(validCards) {
 function leadToProtectNil(validCards, hand, ctx) {
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
+  const memory = ctx.memory;
 
   if (offSuit.length > 0) {
+    // Lead master cards first — guaranteed to win, protects nil partner
+    const masters = offSuit.filter(c => isMasterCard(c, memory));
+    if (masters.length > 0) {
+      // Prefer masters from suits where partner is NOT void
+      // (if partner is void, they might have to trump and win accidentally)
+      const safeMasters = masters.filter(c =>
+        !isKnownVoid(ctx.partnerId, c.suit, memory)
+      );
+      if (safeMasters.length > 0) return pickFromShortestSuit(safeMasters, hand);
+      return pickFromShortestSuit(masters, hand);
+    }
+
+    // Lead high cards (aces, kings)
     const aces = offSuit.filter(c => c.rank === 'A');
     if (aces.length > 0) {
       return pickFromShortestSuit(aces, hand);
@@ -848,31 +862,39 @@ function followToProtectNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuit
     const partnerIsWinning = getCurrentWinner(currentTrick).playerId === ctx.partnerId;
 
     if (partnerIsWinning) {
+      // Partner (nil) is winning — we MUST overtake them to save the nil!
       if (hasLedSuit) {
         const partnerCardValue = getEffectiveValue(partnerPlayed.card, ledSuit);
         const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > partnerCardValue);
         if (beaters.length > 0) return pickLowest(beaters);
       }
-      if (!hasLedSuit && ledSuit !== 'S') {
-        const spades = hand.filter(c => c.suit === 'S');
-        const currentHighTrump = currentTrick
-          .filter(t => t.card.suit === 'S')
-          .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
-        const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
-        if (beatingSpades.length > 0) return pickLowest(beatingSpades);
-        if (spades.length > 0 && currentHighTrump === 0) return pickLowest(spades);
-      }
-    }
-  } else {
-    if (ctx.seatPosition <= 1) {
+      // Can't follow suit — trump to save partner (handled in discardNormal nil section)
+      return null;
+    } else {
+      // Partner played and is NOT winning — they're safe!
+      // Play high to win (protect partner from future danger) or duck — either way
+      // just play normally but prefer to win to control the trick
       if (hasLedSuit) {
         const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
-        if (beaters.length > 0) return pickHighest(beaters);
+        if (beaters.length > 0) return pickLowest(beaters);
+        // Can't beat — play lowest
+        return pickLowest(cardsOfSuit);
       }
+      // Can't follow suit — discardNormal nil section handles this
+      return null;
     }
+  } else {
+    // Partner hasn't played yet — play high to win the trick before partner plays
+    // so partner doesn't accidentally win
+    if (hasLedSuit) {
+      const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
+      if (beaters.length > 0) return pickHighest(beaters);
+      // Can't beat current winner — play highest anyway to maximize chance
+      return pickHighest(cardsOfSuit);
+    }
+    // Can't follow suit — discardNormal nil section handles trumping
+    return null;
   }
-
-  return null;
 }
 
 function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue, ctx) {
@@ -912,17 +934,22 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
 
   // --- Still need tricks to make bid ---
   if (ctx.needMore) {
-    // If partner is winning with a master card, definitely let them have it
-    if (winnerIsPartner && ctx.seatPosition === 3) {
-      if (!ctx.compensateForPartner) {
-        return pickLowest(cardsOfSuit);
-      }
-    }
-    if (winnerIsPartner && ctx.seatPosition === 2) {
-      // Check if partner's card is master (highest remaining) - safe to duck
+    // If partner is winning, generally let them have it
+    if (winnerIsPartner) {
       const partnerPlay = currentTrick.find(t => t.playerId === ctx.partnerId);
       const partnerIsMaster = partnerPlay && isMasterCard(partnerPlay.card, memory);
+
+      // Last to play or partner has a strong card — definitely duck
+      if (ctx.seatPosition === 3 && !ctx.compensateForPartner) {
+        return pickLowest(cardsOfSuit);
+      }
+      // Partner's card is master or strong — duck
       if ((partnerIsMaster || winningValue >= RANK_VALUE['Q']) && !ctx.compensateForPartner) {
+        return pickLowest(cardsOfSuit);
+      }
+      // Even if partner's card isn't great, prefer to duck rather than
+      // waste our own card overtaking partner
+      if (!ctx.compensateForPartner) {
         return pickLowest(cardsOfSuit);
       }
     }
@@ -978,30 +1005,69 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
   const currentWinner = getCurrentWinner(currentTrick);
   const winningCardIsMaster = isMasterCard(currentWinner.card, memory);
 
-  // --- Still need tricks to make bid ---
-  if (ctx.needMore) {
-    if (winnerIsPartner && ctx.seatPosition >= 2) {
-      if (ctx.urgentBid && ctx.seatPosition === 2 && !winningCardIsMaster) {
-        // Partner's card is NOT master and opponent plays last - they might beat it
+  // --- PARTNER IS NIL: special handling ---
+  // When partner bid nil, be very careful about trumping.
+  // Only trump if partner is currently winning (to save them from taking a trick).
+  if (ctx.partnerIsNil) {
+    const partnerPlayed = currentTrick.find(t => t.playerId === ctx.partnerId);
+
+    if (partnerPlayed) {
+      const partnerIsWinning = currentWinner.playerId === ctx.partnerId;
+      if (partnerIsWinning) {
+        // Partner is winning — MUST trump to save them!
         if (spades.length > 0 && ledSuit !== 'S') {
           const currentHighTrump = currentTrick
             .filter(t => t.card.suit === 'S')
             .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
           const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
           if (beatingSpades.length > 0) return pickLowest(beatingSpades);
+          if (spades.length > 0 && currentHighTrump === 0) return pickLowest(spades);
         }
+        // Can't trump — dump highest off-suit
+        if (nonSpade.length > 0) return pickHighest(nonSpade);
+        return pickLowest(hand);
+      } else {
+        // Partner played and is NOT winning — they're safe, just discard
+        if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+        return pickLowest(hand);
+      }
+    } else {
+      // Partner hasn't played yet — take the trick if we can to prevent partner
+      // from having to win it. Trump aggressively.
+      if (spades.length > 0 && ledSuit !== 'S') {
+        const currentHighTrump = currentTrick
+          .filter(t => t.card.suit === 'S')
+          .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
+        const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
+        if (beatingSpades.length > 0) return pickLowest(beatingSpades);
+        if (spades.length > 0 && currentHighTrump === 0) return pickLowest(spades);
       }
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
       return pickLowest(hand);
     }
+  }
 
-    // Don't waste a trump on a card we know is already the master
-    // (e.g., player leads Q of diamonds after A and K have been played)
-    if (winningCardIsMaster && winnerIsPartner) {
-      if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
-      return pickLowest(hand);
+  // --- NEVER trump partner's winning card ---
+  // If partner is winning the trick, don't override them with a trump.
+  // Only exception: urgentBid AND partner's card is weak AND opponent plays after us.
+  if (winnerIsPartner) {
+    if (ctx.urgentBid && ctx.seatPosition === 2 && !winningCardIsMaster) {
+      // Partner's card is vulnerable and opponent plays last — consider trumping to secure
+      if (spades.length > 0 && ledSuit !== 'S') {
+        const currentHighTrump = currentTrick
+          .filter(t => t.card.suit === 'S')
+          .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
+        const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
+        if (beatingSpades.length > 0) return pickLowest(beatingSpades);
+      }
     }
+    // Partner is winning — discard, don't trump them
+    if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+    return pickLowest(hand);
+  }
 
+  // --- Still need tricks to make bid ---
+  if (ctx.needMore) {
     // Trump to win
     if (spades.length > 0 && ledSuit !== 'S') {
       const currentHighTrump = currentTrick
@@ -1018,18 +1084,13 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
   // --- Bid is met: play based on disposition ---
 
   if (ctx.setMode) {
-    if (winnerIsPartner) {
-      if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
-      return pickLowest(hand);
-    }
-
-    // Don't trump a master card - it's going to win anyway, save the spade
+    // Don't trump a master card — it's going to win anyway, save the spade
     if (winningCardIsMaster) {
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
       return pickLowest(hand);
     }
 
-    // Opponent is winning with a non-master - trump them to set
+    // Opponent is winning with a non-master — trump them to set
     if (spades.length > 0 && ledSuit !== 'S') {
       const currentHighTrump = currentTrick
         .filter(t => t.card.suit === 'S')
