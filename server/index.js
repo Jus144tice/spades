@@ -24,10 +24,12 @@ const sessionMiddleware = session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    maxAge: 30 * 24 * 60 * 60 * 1000,
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
   },
+
 });
 
 app.use(sessionMiddleware);
@@ -38,7 +40,7 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: '/auth/google/callback',
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback',
   proxy: true,
 }, async (accessToken, refreshToken, profile, done) => {
   try {
