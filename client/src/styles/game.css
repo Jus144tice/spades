@@ -472,41 +472,57 @@
 /* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
   .game-screen {
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
-  /* Scoreboard */
+  /* Scoreboard — teams left/right, round info in middle */
   .scoreboard {
-    padding: 8px 12px;
-    flex-wrap: wrap;
-    gap: 4px;
+    padding: 6px 8px;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    flex-shrink: 0;
   }
 
   .score-team {
-    min-width: 90px;
+    min-width: 0;
+    flex: 1;
   }
 
   .score-value {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .score-team-name {
-    font-size: 11px;
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .score-books, .score-bid-tracker, .score-remaining {
-    font-size: 10px;
+    font-size: 9px;
+  }
+
+  .score-center {
+    flex-shrink: 0;
+    padding: 0 4px;
   }
 
   .books-remaining-banner {
-    padding: 2px 10px;
-    margin: 4px 0 2px;
+    padding: 2px 8px;
+    margin: 2px 0 1px;
   }
 
   .books-remaining-number {
-    font-size: 16px;
+    font-size: 14px;
+  }
+
+  .books-remaining-label {
+    font-size: 9px;
   }
 
   .round-label {
@@ -527,51 +543,72 @@
     padding: 6px 4px;
   }
 
-  /* Game Table — single column on mobile */
+  /* Game Table — compact to fit viewport */
   .game-table {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 8px 4px;
-    gap: 4px;
-    min-height: 0;
+    padding: 4px 4px;
+    gap: 2px;
     flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .seat-top, .seat-left, .seat-right, .seat-bottom {
+  .seat-top {
+    order: 1;
+    display: flex;
     justify-content: center;
     align-items: center;
-    display: flex;
     width: 100%;
+    flex-shrink: 0;
   }
 
-  .seat-top { order: 1; }
-  .seat-left { order: 2; }
-  .seat-right { order: 3; }
-  .trick-area { order: 4; width: 100%; }
-  .seat-bottom { order: 5; }
-
-  /* Opponents row — left and right side by side */
+  /* Left and right opponents side by side */
   .seat-left, .seat-right {
-    display: inline-flex;
+    order: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
     width: auto;
+  }
+
+  /* Wrap left+right into a row using the game-table as flex-wrap */
+  .game-table {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .seat-left { margin-right: 8px; }
+  .seat-right { margin-left: 8px; }
+
+  .trick-area { order: 3; width: 100%; flex: 1; min-height: 0; }
+
+  .seat-bottom {
+    order: 4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    flex-shrink: 0;
   }
 
   /* Player Seat */
   .player-seat {
-    min-width: 100px;
-    padding: 6px 10px;
+    min-width: 0;
+    padding: 4px 8px;
     border-radius: 8px;
   }
 
   .player-seat-name {
-    font-size: 12px;
-    margin-bottom: 2px;
+    font-size: 11px;
+    margin-bottom: 1px;
   }
 
   .player-bid-tricks {
     gap: 4px;
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .bid-display, .tricks-display {
@@ -584,7 +621,7 @@
   }
 
   .bid-tricks-value {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .dealer-chip-icon {
@@ -611,7 +648,7 @@
 
   /* Trick Area */
   .trick-area {
-    min-height: 140px;
+    min-height: 100px;
     position: relative;
   }
 
@@ -621,13 +658,14 @@
   .trick-right { right: 15%; }
 
   .trick-empty {
-    width: 56px;
-    height: 78px;
+    width: 48px;
+    height: 67px;
   }
 
   /* Bid Panel */
   .bid-panel {
-    padding: 12px 12px;
+    padding: 10px 12px;
+    flex-shrink: 0;
   }
 
   .bid-panel h3 {
@@ -640,20 +678,21 @@
   }
 
   .bid-btn {
-    width: 48px;
-    height: 48px;
-    font-size: 18px;
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
     border-radius: 10px;
   }
 
   .bid-btn.nil-btn {
-    padding: 0 14px;
-    height: 48px;
+    padding: 0 12px;
+    height: 44px;
   }
 
   .waiting-bid {
-    padding: 12px;
+    padding: 10px;
     font-size: 13px;
+    flex-shrink: 0;
   }
 
   .bid-summary {

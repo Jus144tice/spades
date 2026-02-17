@@ -433,18 +433,19 @@ body {
 /* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
   body {
-    overflow: auto;
+    overflow: hidden;
   }
 
   .app {
     flex-direction: column;
-    height: auto;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .app-main {
     flex: 1;
-    overflow-y: visible;
+    overflow: hidden;
+    min-height: 0;
   }
 
   .app-chat {

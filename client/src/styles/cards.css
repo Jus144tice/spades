@@ -183,14 +183,26 @@
     right: 4px;
   }
 
+  /* Hide bottom-right corner in hand — prevents bleed-through from overlap */
+  .hand .bottom-right {
+    display: none;
+  }
+
   /* Hand layout — tighter overlap for mobile */
   .hand {
     padding: 6px 8px 10px;
     gap: 0;
+    flex-shrink: 0;
   }
 
   .hand-card {
     margin: 0 -8px;
+  }
+
+  /* Disabled cards: use filter instead of opacity to prevent bleed-through */
+  .hand-card:not(.playable) .card {
+    opacity: 1;
+    filter: brightness(0.45) saturate(0.3);
   }
 
   /* Disable hover lift on touch devices */
