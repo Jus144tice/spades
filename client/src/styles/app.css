@@ -433,9 +433,9 @@ body {
   margin-left: auto;
 }
 
-/* Mobile chat toggle button */
+/* Mobile chat toggle button — always display:flex since JSX conditionally renders it */
 .chat-toggle-btn {
-  display: none;
+  display: flex;
   position: fixed;
   bottom: 100px;
   right: 12px;
@@ -471,8 +471,13 @@ body {
     min-height: 0;
   }
 
-  .chat-toggle-btn {
-    display: flex;
+  /* Force-hide chat on mobile — only the .chat-open class can override */
+  .app-chat {
+    display: none !important;
+  }
+
+  .app-chat.chat-open {
+    display: flex !important;
   }
 
   .modal {
