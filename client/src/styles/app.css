@@ -471,15 +471,6 @@ body {
     min-height: 0;
   }
 
-  /* Force-hide chat on mobile — only the .chat-open class can override */
-  .app-chat {
-    display: none !important;
-  }
-
-  .app-chat.chat-open {
-    display: flex !important;
-  }
-
   .modal {
     padding: 20px 16px;
     max-width: 95%;

@@ -8,25 +8,15 @@ import Chat from './components/Chat.jsx';
 import ErrorToast from './components/ErrorToast.jsx';
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    // Use screen.width (physical device width) which is reliable on iOS Safari
-    // even when window.innerWidth reports the CSS layout width (980px default)
-    const screenW = window.screen?.width || Infinity;
-    const innerW = window.innerWidth;
-    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    return Math.min(screenW, innerW) < 769 || (hasTouchScreen && screenW < 1024);
-  });
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 769
+  );
   useEffect(() => {
-    const check = () => {
-      const screenW = window.screen?.width || Infinity;
-      const innerW = window.innerWidth;
-      const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      setIsMobile(Math.min(screenW, innerW) < 769 || (hasTouchScreen && screenW < 1024));
-    };
-    window.addEventListener('resize', check);
-    check();
-    return () => window.removeEventListener('resize', check);
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    setIsMobile(mq.matches);
+    return () => mq.removeEventListener('change', handler);
   }, []);
   return isMobile;
 }
@@ -81,10 +71,7 @@ export default function App() {
       {state.screen !== 'join' && (
         <>
           {showChat && (
-            <div
-              className={`app-chat ${chatOpen ? 'chat-open' : ''}`}
-              style={isMobile && !chatOpen ? { display: 'none' } : undefined}
-            >
+            <div className={`app-chat ${chatOpen ? 'chat-open' : ''}`}>
               <Chat />
             </div>
           )}
