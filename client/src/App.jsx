@@ -7,18 +7,28 @@ import GameScreen from './screens/GameScreen.jsx';
 import Chat from './components/Chat.jsx';
 import ErrorToast from './components/ErrorToast.jsx';
 
-function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth >= 769
-  );
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    // Use screen.width (physical device width) which is reliable on iOS Safari
+    // even when window.innerWidth reports the CSS layout width (980px default)
+    const screenW = window.screen?.width || Infinity;
+    const innerW = window.innerWidth;
+    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    return Math.min(screenW, innerW) < 769 || (hasTouchScreen && screenW < 1024);
+  });
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 769px)');
-    const handler = (e) => setIsDesktop(e.matches);
-    mq.addEventListener('change', handler);
-    setIsDesktop(mq.matches);
-    return () => mq.removeEventListener('change', handler);
+    const check = () => {
+      const screenW = window.screen?.width || Infinity;
+      const innerW = window.innerWidth;
+      const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      setIsMobile(Math.min(screenW, innerW) < 769 || (hasTouchScreen && screenW < 1024));
+    };
+    window.addEventListener('resize', check);
+    check();
+    return () => window.removeEventListener('resize', check);
   }, []);
-  return isDesktop;
+  return isMobile;
 }
 
 function LoginScreen() {
@@ -43,8 +53,8 @@ export default function App() {
   const { user, loading } = useAuth();
   const { state } = useGame();
   const [chatOpen, setChatOpen] = useState(false);
-  const isDesktop = useIsDesktop();
-  const showChat = isDesktop || chatOpen;
+  const isMobile = useIsMobile();
+  const showChat = !isMobile || chatOpen;
 
   if (loading) {
     return (
@@ -71,11 +81,14 @@ export default function App() {
       {state.screen !== 'join' && (
         <>
           {showChat && (
-            <div className={`app-chat ${chatOpen ? 'chat-open' : ''}`}>
+            <div
+              className={`app-chat ${chatOpen ? 'chat-open' : ''}`}
+              style={isMobile && !chatOpen ? { display: 'none' } : undefined}
+            >
               <Chat />
             </div>
           )}
-          {!isDesktop && (
+          {isMobile && (
             <button
               className="chat-toggle-btn"
               onClick={() => setChatOpen(prev => !prev)}
