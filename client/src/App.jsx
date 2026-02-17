@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useGame } from './context/GameContext.jsx';
 import JoinScreen from './screens/JoinScreen.jsx';
@@ -6,6 +6,20 @@ import LobbyScreen from './screens/LobbyScreen.jsx';
 import GameScreen from './screens/GameScreen.jsx';
 import Chat from './components/Chat.jsx';
 import ErrorToast from './components/ErrorToast.jsx';
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth >= 769
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 769px)');
+    const handler = (e) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    setIsDesktop(mq.matches);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isDesktop;
+}
 
 function LoginScreen() {
   const { login } = useAuth();
@@ -29,6 +43,8 @@ export default function App() {
   const { user, loading } = useAuth();
   const { state } = useGame();
   const [chatOpen, setChatOpen] = useState(false);
+  const isDesktop = useIsDesktop();
+  const showChat = isDesktop || chatOpen;
 
   if (loading) {
     return (
@@ -54,16 +70,20 @@ export default function App() {
       </div>
       {state.screen !== 'join' && (
         <>
-          <div className={`app-chat ${chatOpen ? 'chat-open' : ''}`}>
-            <Chat />
-          </div>
-          <button
-            className="chat-toggle-btn"
-            onClick={() => setChatOpen(prev => !prev)}
-            aria-label="Toggle chat"
-          >
-            {chatOpen ? '\u2715' : '\uD83D\uDCAC'}
-          </button>
+          {showChat && (
+            <div className={`app-chat ${chatOpen ? 'chat-open' : ''}`}>
+              <Chat />
+            </div>
+          )}
+          {!isDesktop && (
+            <button
+              className="chat-toggle-btn"
+              onClick={() => setChatOpen(prev => !prev)}
+              aria-label="Toggle chat"
+            >
+              {chatOpen ? '\u2715' : '\uD83D\uDCAC'}
+            </button>
+          )}
         </>
       )}
       <ErrorToast />
