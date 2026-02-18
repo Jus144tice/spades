@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="8" fill="#fff"/>
+  <text x="6" y="18" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#111">A</text>
+  <path d="M32 12 C32 12 18 28 18 36 C18 42 24 46 32 40 C40 46 46 42 46 36 C46 28 32 12 32 12Z" fill="#111"/>
+  <rect x="30" y="38" width="4" height="10" rx="1" fill="#111"/>
+  <ellipse cx="26" cy="49" rx="5" ry="3" fill="#111"/>
+  <ellipse cx="38" cy="49" rx="5" ry="3" fill="#111"/>
+  <text x="47" y="58" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#111" transform="rotate(180,50.5,51)">A</text>
+</svg>
