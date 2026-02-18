@@ -30,15 +30,18 @@ body {
   color: var(--text-primary);
   overflow: hidden;
   height: 100vh;
+  height: 100dvh;
 }
 
 #root {
   height: 100vh;
+  height: 100dvh;
 }
 
 .app {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -87,6 +90,7 @@ body {
   cursor: pointer;
   transition: all 0.15s;
   font-family: inherit;
+  touch-action: manipulation;
 }
 
 .btn:disabled {

@@ -134,53 +134,54 @@
 
 /* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
+  /* Smaller cards so 13 fit in one row on ~360px screens */
   .card {
-    width: 48px;
-    height: 67px;
-    border-radius: 6px;
+    width: 42px;
+    height: 59px;
+    border-radius: 5px;
   }
 
   .card-small {
-    width: 40px;
-    height: 56px;
+    width: 36px;
+    height: 50px;
   }
 
   .card-rank {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .card-suit {
-    font-size: 9px;
-  }
-
-  .card-small .card-rank {
-    font-size: 9px;
-  }
-
-  .card-small .card-suit {
     font-size: 8px;
   }
 
+  .card-small .card-rank {
+    font-size: 8px;
+  }
+
+  .card-small .card-suit {
+    font-size: 7px;
+  }
+
   .card-center {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .card-small .card-center {
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .card-back::after {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .top-left {
     top: 2px;
-    left: 4px;
+    left: 3px;
   }
 
   .bottom-right {
     bottom: 2px;
-    right: 4px;
+    right: 3px;
   }
 
   /* Hide bottom-right corner in hand — prevents bleed-through from overlap */
@@ -188,15 +189,17 @@
     display: none;
   }
 
-  /* Hand layout — tighter overlap for mobile */
+  /* Hand layout — force single row, tighter overlap */
   .hand {
-    padding: 6px 8px 10px;
+    padding: 4px 4px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
     gap: 0;
     flex-shrink: 0;
+    flex-wrap: nowrap;
   }
 
   .hand-card {
-    margin: 0 -8px;
+    margin: 0 -9px;
   }
 
   /* Disabled cards: use filter instead of opacity to prevent bleed-through */

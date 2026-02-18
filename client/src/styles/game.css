@@ -409,6 +409,8 @@
   cursor: pointer;
   transition: all 0.15s;
   font-family: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .bid-btn:hover {
@@ -473,6 +475,7 @@
 @media (max-width: 768px) {
   .game-screen {
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -543,55 +546,26 @@
     padding: 6px 4px;
   }
 
-  /* Game Table — compact to fit viewport */
+  /* Game Table — keep proper "around the table" layout */
   .game-table {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 4px 4px;
+    display: grid;
+    grid-template-areas:
+      ".    top    ."
+      "left center right"
+      ".    bottom .";
+    grid-template-columns: 80px 1fr 80px;
+    grid-template-rows: auto 1fr auto;
+    padding: 4px;
     gap: 2px;
     flex: 1;
     min-height: 0;
     overflow: hidden;
   }
 
-  .seat-top {
-    order: 1;
+  .seat-top, .seat-left, .seat-right, .seat-bottom {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 100%;
-    flex-shrink: 0;
-  }
-
-  /* Left and right opponents side by side */
-  .seat-left, .seat-right {
-    order: 2;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-shrink: 0;
-    width: auto;
-  }
-
-  /* Wrap left+right into a row using the game-table as flex-wrap */
-  .game-table {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .seat-left { margin-right: 8px; }
-  .seat-right { margin-left: 8px; }
-
-  .trick-area { order: 3; width: 100%; flex: 1; min-height: 0; }
-
-  .seat-bottom {
-    order: 4;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    flex-shrink: 0;
   }
 
   /* Player Seat */
@@ -602,8 +576,23 @@
   }
 
   .player-seat-name {
-    font-size: 11px;
+    font-size: 10px;
     margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Side seats need narrower layout */
+  .seat-left .player-seat,
+  .seat-right .player-seat {
+    padding: 3px 4px;
+    max-width: 76px;
+  }
+
+  .seat-left .player-bid-tricks,
+  .seat-right .player-bid-tricks {
+    gap: 2px;
   }
 
   .player-bid-tricks {
@@ -612,16 +601,16 @@
   }
 
   .bid-display, .tricks-display {
-    padding: 1px 6px;
-    min-width: 34px;
+    padding: 1px 4px;
+    min-width: 30px;
   }
 
   .bid-tricks-label {
-    font-size: 8px;
+    font-size: 7px;
   }
 
   .bid-tricks-value {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .dealer-chip-icon {
@@ -648,49 +637,53 @@
 
   /* Trick Area */
   .trick-area {
-    min-height: 100px;
+    min-height: 80px;
     position: relative;
   }
 
-  .trick-bottom { bottom: 5px; }
-  .trick-top { top: 5px; }
-  .trick-left { left: 15%; }
-  .trick-right { right: 15%; }
+  .trick-bottom { bottom: 2px; }
+  .trick-top { top: 2px; }
+  .trick-left { left: 20%; }
+  .trick-right { right: 20%; }
 
   .trick-empty {
-    width: 48px;
-    height: 67px;
+    width: 42px;
+    height: 59px;
   }
 
-  /* Bid Panel */
+  /* Bid Panel — compact, with z-index to prevent hand overlap */
   .bid-panel {
-    padding: 10px 12px;
+    padding: 8px 12px;
     flex-shrink: 0;
+    position: relative;
+    z-index: 5;
   }
 
   .bid-panel h3 {
-    font-size: 12px;
-    margin-bottom: 8px;
+    font-size: 11px;
+    margin-bottom: 6px;
   }
 
   .bid-options {
-    gap: 8px;
+    gap: 6px;
+    margin-bottom: 8px;
   }
 
   .bid-btn {
-    width: 44px;
-    height: 44px;
-    font-size: 16px;
-    border-radius: 10px;
+    width: 38px;
+    height: 38px;
+    font-size: 14px;
+    border-radius: 8px;
   }
 
   .bid-btn.nil-btn {
-    padding: 0 12px;
-    height: 44px;
+    padding: 0 10px;
+    height: 38px;
+    font-size: 13px;
   }
 
   .waiting-bid {
-    padding: 10px;
+    padding: 8px;
     font-size: 13px;
     flex-shrink: 0;
   }
