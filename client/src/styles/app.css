@@ -476,14 +476,20 @@ body {
   }
 
   .modal {
-    padding: 20px 16px;
+    padding: 16px 14px;
     max-width: 95%;
     border-radius: 12px;
   }
 
   .modal h2 {
-    font-size: 18px;
-    margin-bottom: 14px;
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+
+  .modal .btn {
+    margin: 12px auto 0;
+    padding: 8px 20px;
+    font-size: 13px;
   }
 
   .round-summary-modal {
@@ -491,11 +497,68 @@ body {
   }
 
   .summary-section {
-    padding: 12px;
+    margin: 6px 0;
+    padding: 8px 10px;
+  }
+
+  .summary-header {
+    margin-bottom: 6px;
+  }
+
+  .summary-header h3 {
+    font-size: 11px;
+  }
+
+  .summary-result {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+
+  .summary-player-row {
+    padding: 2px 0;
+    font-size: 12px;
+  }
+
+  .summary-player-name {
+    min-width: 60px;
+    font-size: 12px;
+  }
+
+  .summary-players {
+    margin-bottom: 6px;
+  }
+
+  .summary-breakdown {
+    padding-top: 6px;
+    margin-bottom: 4px;
+  }
+
+  .breakdown-line {
+    padding: 2px 0;
+    font-size: 12px;
+  }
+
+  .breakdown-total {
+    padding: 4px 0 2px;
+    font-size: 13px;
+  }
+
+  .summary-total-row {
+    padding: 5px 8px;
+    gap: 8px;
+    margin-top: 2px;
   }
 
   .summary-total-value {
-    font-size: 18px;
+    font-size: 16px;
+  }
+
+  .summary-total-label {
+    font-size: 10px;
+  }
+
+  .summary-divider {
+    margin: 2px 0;
   }
 
   .error-toast {
