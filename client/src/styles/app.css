@@ -566,4 +566,205 @@ body {
     font-size: 13px;
     padding: 10px 18px;
   }
+
+  .setup-card {
+    max-width: 100%;
+    padding: 20px 16px;
+  }
+
+  .preset-buttons {
+    flex-wrap: wrap;
+  }
+
+  .preset-btn {
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+
+  .settings-btn {
+    bottom: 56px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .settings-modal {
+    max-width: 95%;
+  }
+}
+
+/* ===== Preferences / Setup Styles ===== */
+
+.setup-card {
+  max-width: 480px;
+  width: 90%;
+}
+
+.setup-save-btn {
+  margin-top: 24px;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+}
+
+.pref-section {
+  margin: 20px 0;
+}
+
+.pref-section-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.preset-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.preset-btn:hover {
+  border-color: var(--accent);
+  background: rgba(79, 195, 247, 0.1);
+}
+
+.preset-btn.selected {
+  border-color: var(--accent);
+  background: rgba(79, 195, 247, 0.2);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Card preview */
+.card-preview {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  justify-content: center;
+}
+
+.preview-card {
+  width: 44px;
+  height: 62px;
+  background: var(--card-bg);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.preview-rank {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.preview-suit {
+  font-size: 16px;
+}
+
+/* Color swatches */
+.color-swatches {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.swatch-check {
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.color-label {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Settings button (gear icon) */
+.settings-btn {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 50;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.settings-btn:hover {
+  color: var(--text-primary);
+  background: #2e4459;
+}
+
+/* Settings modal */
+.settings-modal {
+  max-width: 480px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.settings-actions .btn {
+  display: inline-block;
+  margin: 0;
 }

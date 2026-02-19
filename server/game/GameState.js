@@ -2,11 +2,14 @@ import { createDeck, shuffle, deal } from './deck.js';
 import { validatePlay, determineTrickWinner } from './tricks.js';
 import { scoreRound, checkWinner } from './scoring.js';
 import { RANK_VALUE } from './constants.js';
+import { parseCardSort, DEFAULTS } from './preferences.js';
 
 export class GameState {
-  constructor(players) {
+  constructor(players, playerPreferences = {}) {
     // players: [{ id, name, team }] - ordered so 0+2=team1, 1+3=team2
     this.players = players;
+    // playerPreferences: { playerId: { cardSort, tableColor } }
+    this.playerPreferences = playerPreferences;
     this.phase = 'bidding'; // bidding | playing | scoring | gameOver
     this.dealerIndex = Math.floor(Math.random() * 4);
     this.hands = {};
@@ -44,20 +47,24 @@ export class GameState {
     const deck = shuffle(createDeck());
     const hands = deal(deck);
     for (let i = 0; i < 4; i++) {
-      this.hands[this.players[i].id] = this.sortHand(hands[i]);
+      const pid = this.players[i].id;
+      const prefs = this.playerPreferences[pid];
+      this.hands[pid] = this.sortHand(hands[i], prefs);
     }
 
     // Bidding starts left of dealer
     this.currentTurnIndex = (this.dealerIndex + 1) % 4;
   }
 
-  sortHand(hand) {
-    const suitOrder = { C: 0, D: 1, S: 2, H: 3 };
+  sortHand(hand, prefs) {
+    const cardSort = prefs?.cardSort || DEFAULTS.cardSort;
+    const { suitOrder, rankDirection } = parseCardSort(cardSort);
+    const rankMul = rankDirection === 'desc' ? -1 : 1;
     return hand.sort((a, b) => {
       if (suitOrder[a.suit] !== suitOrder[b.suit]) {
         return suitOrder[a.suit] - suitOrder[b.suit];
       }
-      return RANK_VALUE[a.rank] - RANK_VALUE[b.rank];
+      return rankMul * (RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
     });
   }
 
@@ -218,9 +225,12 @@ export class GameState {
   }
 
   getStateForPlayer(playerId) {
+    // Re-sort hand for this specific player's preferences (hand may have been
+    // initially sorted with their prefs, but this ensures correctness after mid-round changes)
+    const hand = this.hands[playerId] || [];
     return {
       phase: this.phase,
-      hand: this.hands[playerId] || [],
+      hand,
       bids: { ...this.bids },
       currentTrick: this.currentTrick.map(t => ({ playerId: t.playerId, card: t.card })),
       tricksTaken: { ...this.tricksTaken },

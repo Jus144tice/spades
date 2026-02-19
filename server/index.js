@@ -10,6 +10,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import pool, { initDB } from './db/index.js';
 import { registerHandlers } from './socketHandlers.js';
+import { validatePreferences, mergeWithDefaults, hasCompletedSetup, PRESETS, TABLE_COLORS } from './game/preferences.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -33,6 +34,7 @@ const sessionMiddleware = session({
 });
 
 app.use(sessionMiddleware);
+app.use(express.json());
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -93,10 +95,13 @@ app.get('/auth/google/callback',
 
 app.get('/auth/me', (req, res) => {
   if (req.isAuthenticated()) {
+    const prefs = req.user.preferences || {};
     res.json({
       id: req.user.id,
       displayName: req.user.display_name,
       avatarUrl: req.user.avatar_url,
+      preferences: mergeWithDefaults(prefs),
+      hasCompletedSetup: hasCompletedSetup(prefs),
     });
   } else {
     res.status(401).json({ error: 'Not authenticated' });
@@ -111,6 +116,34 @@ app.post('/auth/logout', (req, res) => {
       res.json({ ok: true });
     });
   });
+});
+
+// --- Preferences API ---
+app.get('/api/preferences', (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
+  const prefs = mergeWithDefaults(req.user.preferences || {});
+  res.json({ preferences: prefs, presets: PRESETS, tableColors: TABLE_COLORS });
+});
+
+app.put('/api/preferences', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const validated = validatePreferences(req.body);
+    const merged = mergeWithDefaults({ ...(req.user.preferences || {}), ...validated });
+
+    await pool.query(
+      'UPDATE users SET preferences = $1 WHERE id = $2',
+      [JSON.stringify(merged), req.user.id]
+    );
+
+    // Update session so subsequent requests see new prefs
+    req.user.preferences = merged;
+
+    res.json({ preferences: merged });
+  } catch (err) {
+    console.error('Failed to update preferences:', err);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
 });
 
 // --- Stats API ---

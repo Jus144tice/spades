@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useGame } from './context/GameContext.jsx';
+import { PreferencesProvider, usePreferences } from './context/PreferencesContext.jsx';
 import JoinScreen from './screens/JoinScreen.jsx';
 import LobbyScreen from './screens/LobbyScreen.jsx';
 import GameScreen from './screens/GameScreen.jsx';
+import SetupScreen from './components/SetupScreen.jsx';
+import SettingsModal from './components/SettingsModal.jsx';
 import Chat from './components/Chat.jsx';
 import ErrorToast from './components/ErrorToast.jsx';
 
@@ -39,14 +42,16 @@ function LoginScreen() {
   );
 }
 
-export default function App() {
-  const { user, loading } = useAuth();
+function AppContent() {
+  const { user, loading: authLoading } = useAuth();
   const { state } = useGame();
+  const { hasCompletedSetup, loading: prefsLoading } = usePreferences();
   const [chatOpen, setChatOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const isMobile = useIsMobile();
   const showChat = !isMobile || chatOpen;
 
-  if (loading) {
+  if (authLoading || prefsLoading) {
     return (
       <div className="join-screen">
         <div className="join-card">
@@ -59,6 +64,10 @@ export default function App() {
 
   if (!user) {
     return <LoginScreen />;
+  }
+
+  if (!hasCompletedSetup) {
+    return <SetupScreen />;
   }
 
   return (
@@ -86,7 +95,24 @@ export default function App() {
           )}
         </>
       )}
+      <button
+        className="settings-btn"
+        onClick={() => setSettingsOpen(true)}
+        aria-label="Settings"
+        title="Settings"
+      >
+        {'\u2699'}
+      </button>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <ErrorToast />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <PreferencesProvider>
+      <AppContent />
+    </PreferencesProvider>
   );
 }

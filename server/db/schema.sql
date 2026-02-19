@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
   display_name VARCHAR(100) NOT NULL,
   avatar_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  preferences JSONB DEFAULT '{}' NOT NULL
 );
 
 -- Games table

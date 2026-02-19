@@ -15,6 +15,7 @@ import {
 import { GameState } from './game/GameState.js';
 import { botBid, botPlayCard } from './botAI.js';
 import pool from './db/index.js';
+import { mergeWithDefaults } from './game/preferences.js';
 
 // Delay range for bot actions (ms) - feels more natural
 const BOT_DELAY_MIN = 800;
@@ -179,7 +180,7 @@ export function registerHandlers(io, socket) {
     io.to(info.lobbyCode).emit('chat_message', msg);
   });
 
-  socket.on('start_game', () => {
+  socket.on('start_game', async () => {
     const info = getPlayerInfo(socket.id);
     if (!info) return;
 
@@ -191,7 +192,29 @@ export function registerHandlers(io, socket) {
 
     const lobby = getLobby(info.lobbyCode);
     const seatedPlayers = arrangeSeating(lobby.players);
-    lobby.game = new GameState(seatedPlayers);
+
+    // Fetch preferences for all human players
+    const playerPreferences = {};
+    const humanPlayers = seatedPlayers.filter(p => !p.isBot && p.userId);
+    if (humanPlayers.length > 0) {
+      try {
+        const userIds = humanPlayers.map(p => p.userId);
+        const result = await pool.query(
+          `SELECT id, preferences FROM users WHERE id = ANY($1)`,
+          [userIds]
+        );
+        for (const row of result.rows) {
+          const player = humanPlayers.find(p => p.userId === row.id);
+          if (player) {
+            playerPreferences[player.id] = mergeWithDefaults(row.preferences || {});
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch player preferences:', err);
+      }
+    }
+
+    lobby.game = new GameState(seatedPlayers, playerPreferences);
     lobby.players = seatedPlayers;
 
     const msg = addChatMessage(info.lobbyCode, null, 'The game has started!');
