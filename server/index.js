@@ -50,16 +50,16 @@ passport.use(new GoogleStrategy({
     const displayName = profile.displayName || profile.emails?.[0]?.value || 'Player';
     const avatarUrl = profile.photos?.[0]?.value || null;
 
-    // Upsert user
+    // Upsert user — new users get default preferences
     const result = await pool.query(
-      `INSERT INTO users (google_id, display_name, avatar_url, last_login)
-       VALUES ($1, $2, $3, NOW())
+      `INSERT INTO users (google_id, display_name, avatar_url, last_login, preferences)
+       VALUES ($1, $2, $3, NOW(), $4)
        ON CONFLICT (google_id) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          avatar_url = EXCLUDED.avatar_url,
          last_login = NOW()
        RETURNING *`,
-      [googleId, displayName, avatarUrl]
+      [googleId, displayName, avatarUrl, JSON.stringify(DEFAULTS)]
     );
 
     done(null, result.rows[0]);

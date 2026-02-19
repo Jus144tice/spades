@@ -77,7 +77,9 @@ export function mergeWithDefaults(prefs) {
 
 /**
  * Check if a user has completed their initial preferences setup.
+ * Currently always true — all users get defaults on creation.
+ * Kept for future use if we re-enable the setup screen.
  */
 export function hasCompletedSetup(prefs) {
-  return prefs && prefs.cardSort && prefs.tableColor;
+  return true;
 }
