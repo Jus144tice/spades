@@ -13,11 +13,13 @@ import {
   removeBot,
   findPlayerByUserId,
   updatePlayerSocket,
+  updateGameSettings,
 } from './lobby.js';
 import { GameState } from './game/GameState.js';
 import { botBid, botPlayCard } from './botAI.js';
 import pool from './db/index.js';
 import { mergeWithDefaults } from './game/preferences.js';
+import { AFK_TURN_TIMEOUT, AFK_FAST_TIMEOUT, AFK_THRESHOLD } from './game/constants.js';
 
 // Delay range for bot actions (ms) - feels more natural
 const BOT_DELAY_MIN = 800;
@@ -27,6 +29,81 @@ const RECONNECT_GRACE_PERIOD = 60000; // 60s before permanently removing a disco
 
 // Track disconnect grace period timers: oldSocketId -> { timer, lobbyCode, userId, playerName }
 const disconnectTimers = new Map();
+
+// --- AFK timer state ---
+// Per-lobby AFK tracking: lobbyCode -> { turnTimer, roundTimers, gameOverTimer, players }
+const lobbyAfkState = new Map();
+
+function getAfkState(lobbyCode) {
+  if (!lobbyAfkState.has(lobbyCode)) {
+    lobbyAfkState.set(lobbyCode, {
+      turnTimer: null,
+      roundTimers: new Map(),
+      gameOverTimer: null,
+      players: new Map(), // playerId -> { consecutive: 0, isAfk: false }
+    });
+  }
+  return lobbyAfkState.get(lobbyCode);
+}
+
+function getPlayerAfk(lobbyCode, playerId) {
+  const afk = getAfkState(lobbyCode);
+  if (!afk.players.has(playerId)) {
+    afk.players.set(playerId, { consecutive: 0, isAfk: false });
+  }
+  return afk.players.get(playerId);
+}
+
+function getPlayerTimeout(lobbyCode, playerId) {
+  const pAfk = getPlayerAfk(lobbyCode, playerId);
+  return pAfk.isAfk ? AFK_FAST_TIMEOUT : AFK_TURN_TIMEOUT;
+}
+
+function resetPlayerAfk(io, lobbyCode, playerId) {
+  const afk = getAfkState(lobbyCode);
+  const pAfk = afk.players.get(playerId);
+  if (!pAfk) return;
+  const wasAfk = pAfk.isAfk;
+  pAfk.consecutive = 0;
+  pAfk.isAfk = false;
+  if (wasAfk) {
+    io.to(lobbyCode).emit('player_afk_changed', { playerId, isAfk: false });
+  }
+}
+
+function clearTurnTimer(lobbyCode) {
+  const afk = lobbyAfkState.get(lobbyCode);
+  if (!afk) return;
+  if (afk.turnTimer) {
+    clearTimeout(afk.turnTimer);
+    afk.turnTimer = null;
+  }
+}
+
+function clearRoundTimers(lobbyCode) {
+  const afk = lobbyAfkState.get(lobbyCode);
+  if (!afk) return;
+  for (const timer of afk.roundTimers.values()) {
+    clearTimeout(timer);
+  }
+  afk.roundTimers.clear();
+}
+
+function clearGameOverTimer(lobbyCode) {
+  const afk = lobbyAfkState.get(lobbyCode);
+  if (!afk) return;
+  if (afk.gameOverTimer) {
+    clearTimeout(afk.gameOverTimer);
+    afk.gameOverTimer = null;
+  }
+}
+
+function cleanupAfkState(lobbyCode) {
+  clearTurnTimer(lobbyCode);
+  clearRoundTimers(lobbyCode);
+  clearGameOverTimer(lobbyCode);
+  lobbyAfkState.delete(lobbyCode);
+}
 
 function botDelay() {
   return BOT_DELAY_MIN + Math.random() * (BOT_DELAY_MAX - BOT_DELAY_MIN);
@@ -41,6 +118,7 @@ export function registerHandlers(io, socket) {
       playerId: socket.id,
       players: lobby.players,
       isHost: true,
+      gameSettings: lobby.gameSettings,
     });
   });
 
@@ -58,6 +136,7 @@ export function registerHandlers(io, socket) {
       players: result.lobby.players,
       chatLog: result.lobby.chatLog,
       isHost: false,
+      gameSettings: result.lobby.gameSettings,
     });
 
     socket.to(result.lobby.code).emit('player_joined', {
@@ -139,6 +218,9 @@ export function registerHandlers(io, socket) {
     const info = getPlayerInfo(socket.id);
     if (!info) return;
 
+    // Chat counts as activity — reset AFK status
+    resetPlayerAfk(io, info.lobbyCode, socket.id);
+
     const msg = addChatMessage(info.lobbyCode, info.playerName, message);
     if (msg) {
       io.to(info.lobbyCode).emit('chat_message', msg);
@@ -186,6 +268,25 @@ export function registerHandlers(io, socket) {
     io.to(info.lobbyCode).emit('chat_message', msg);
   });
 
+  socket.on('update_game_settings', (settings) => {
+    const info = getPlayerInfo(socket.id);
+    if (!info) return;
+
+    const lobby = getLobby(info.lobbyCode);
+    if (!lobby || lobby.hostId !== socket.id) {
+      socket.emit('error_msg', { message: 'Only the host can change game settings' });
+      return;
+    }
+
+    const result = updateGameSettings(info.lobbyCode, settings);
+    if (result.error) {
+      socket.emit('error_msg', { message: result.error });
+      return;
+    }
+
+    io.to(info.lobbyCode).emit('game_settings_updated', result.gameSettings);
+  });
+
   socket.on('start_game', async () => {
     const info = getPlayerInfo(socket.id);
     if (!info) return;
@@ -197,7 +298,8 @@ export function registerHandlers(io, socket) {
     }
 
     const lobby = getLobby(info.lobbyCode);
-    const seatedPlayers = arrangeSeating(lobby.players);
+    const teamPlayers = lobby.players.filter(p => p.team !== null);
+    const seatedPlayers = arrangeSeating(teamPlayers);
 
     // Fetch preferences for all human players
     const playerPreferences = {};
@@ -220,8 +322,7 @@ export function registerHandlers(io, socket) {
       }
     }
 
-    lobby.game = new GameState(seatedPlayers, playerPreferences);
-    lobby.players = seatedPlayers;
+    lobby.game = new GameState(seatedPlayers, playerPreferences, lobby.gameSettings);
 
     const msg = addChatMessage(info.lobbyCode, null, 'The game has started!');
     io.to(info.lobbyCode).emit('chat_message', msg);
@@ -234,18 +335,28 @@ export function registerHandlers(io, socket) {
       }
     }
 
+    // Send spectators the game state (no hand)
+    const spectators = lobby.players.filter(p => !p.team && !p.isBot);
+    for (const spec of spectators) {
+      const state = lobby.game.getStateForPlayer(spec.id);
+      io.to(spec.id).emit('game_started', { ...state, isSpectator: true });
+    }
+
     // Trigger bot turns if a bot needs to bid first
     scheduleBotTurn(io, info.lobbyCode);
   });
 
-  socket.on('place_bid', ({ bid }) => {
+  socket.on('place_bid', ({ bid, blindNil }) => {
     const info = getPlayerInfo(socket.id);
     if (!info) return;
 
     const lobby = getLobby(info.lobbyCode);
     if (!lobby || !lobby.game) return;
 
-    const result = lobby.game.placeBid(socket.id, bid);
+    clearTurnTimer(info.lobbyCode);
+    resetPlayerAfk(io, info.lobbyCode, socket.id);
+
+    const result = lobby.game.placeBid(socket.id, bid, { blindNil: !!blindNil });
     if (result.error) {
       socket.emit('error_msg', { message: result.error });
       return;
@@ -254,6 +365,7 @@ export function registerHandlers(io, socket) {
     io.to(info.lobbyCode).emit('bid_placed', {
       playerId: socket.id,
       bid,
+      blindNil: !!blindNil,
       allBidsIn: result.allBidsIn,
       nextTurnId: result.nextTurnId,
     });
@@ -274,6 +386,9 @@ export function registerHandlers(io, socket) {
     const lobby = getLobby(info.lobbyCode);
     if (!lobby || !lobby.game) return;
 
+    clearTurnTimer(info.lobbyCode);
+    resetPlayerAfk(io, info.lobbyCode, socket.id);
+
     processCardPlay(io, info.lobbyCode, socket.id, card);
   });
 
@@ -283,6 +398,14 @@ export function registerHandlers(io, socket) {
 
     const lobby = getLobby(info.lobbyCode);
     if (!lobby || !lobby.game || !lobby.readyForNextRound) return;
+
+    // Clear this player's round summary timer and reset AFK
+    const afk = lobbyAfkState.get(info.lobbyCode);
+    if (afk && afk.roundTimers.has(socket.id)) {
+      clearTimeout(afk.roundTimers.get(socket.id));
+      afk.roundTimers.delete(socket.id);
+    }
+    resetPlayerAfk(io, info.lobbyCode, socket.id);
 
     lobby.readyForNextRound.add(socket.id);
 
@@ -301,6 +424,13 @@ export function registerHandlers(io, socket) {
         }
       }
 
+      // Send spectators the new round state
+      const spectators = lobby.players.filter(p => !p.team && !p.isBot);
+      for (const spec of spectators) {
+        const state = lobby.game.getStateForPlayer(spec.id);
+        io.to(spec.id).emit('new_round', state);
+      }
+
       const msg = addChatMessage(info.lobbyCode, null, `Round ${lobby.game.roundNumber} - Deal 'em up!`);
       io.to(info.lobbyCode).emit('chat_message', msg);
 
@@ -314,6 +444,8 @@ export function registerHandlers(io, socket) {
 
     const lobby = getLobby(info.lobbyCode);
     if (!lobby) return;
+
+    cleanupAfkState(info.lobbyCode);
 
     lobby.game = null;
     for (const p of lobby.players) {
@@ -358,6 +490,20 @@ export function registerHandlers(io, socket) {
     // Remap all socket IDs (lobby, game state, hands, bids, etc.)
     updatePlayerSocket(oldSocketId, socket.id, lobbyCode);
 
+    // Remap AFK state for this player's new socket ID
+    const afk = lobbyAfkState.get(lobbyCode);
+    if (afk && afk.players.has(oldSocketId)) {
+      const pAfk = afk.players.get(oldSocketId);
+      afk.players.delete(oldSocketId);
+      afk.players.set(socket.id, pAfk);
+      // Remap round timer if one exists
+      if (afk.roundTimers.has(oldSocketId)) {
+        const timer = afk.roundTimers.get(oldSocketId);
+        afk.roundTimers.delete(oldSocketId);
+        afk.roundTimers.set(socket.id, timer);
+      }
+    }
+
     // Join the socket room
     socket.join(lobbyCode);
 
@@ -369,6 +515,7 @@ export function registerHandlers(io, socket) {
 
     // Send current state back to the rejoining player
     if (lobby.game) {
+      const isGamePlayer = lobby.game.players.some(p => p.id === socket.id);
       const gameState = lobby.game.getStateForPlayer(socket.id);
       // Include round summary if we're in scoring phase
       const roundSummary = lobby.game.phase === 'scoring'
@@ -377,7 +524,8 @@ export function registerHandlers(io, socket) {
       // Include game over data if applicable
       let gameOverData = null;
       if (lobby.game.phase === 'gameOver') {
-        const winner = lobby.game.scores.team1 >= 500 ? 'team1' : 'team2';
+        const winTarget = lobby.game.settings?.winTarget || 500;
+        const winner = lobby.game.scores.team1 >= winTarget ? 'team1' : 'team2';
         const winTeamPlayers = lobby.game.players
           .filter(p => p.team === (winner === 'team1' ? 1 : 2))
           .map(p => p.name);
@@ -398,6 +546,8 @@ export function registerHandlers(io, socket) {
         chatLog: lobby.chatLog,
         roundSummary,
         gameOverData,
+        isSpectator: !isGamePlayer,
+        gameSettings: lobby.gameSettings,
         ...gameState,
       });
     } else {
@@ -408,6 +558,7 @@ export function registerHandlers(io, socket) {
         players: lobby.players,
         isHost: lobby.hostId === socket.id,
         chatLog: lobby.chatLog,
+        gameSettings: lobby.gameSettings,
       });
     }
   });
@@ -513,9 +664,15 @@ function processCardPlay(io, lobbyCode, playerId, card) {
           saveGameResults(lobby.game, winningTeam).catch(err => {
             console.error('Failed to save game results:', err);
           });
+
+          // Clear any lingering turn timer, then start game over timer
+          clearTurnTimer(lobbyCode);
+          startGameOverTimer(io, lobbyCode);
         } else {
           // Wait for human players to dismiss the round summary before starting next round
           lobby.readyForNextRound = new Set();
+          // Start AFK timers for round summary dismissal
+          startRoundSummaryTimers(io, lobbyCode);
         }
       }, TRICK_DISPLAY_DELAY);
 
@@ -534,6 +691,195 @@ function processCardPlay(io, lobbyCode, playerId, card) {
   scheduleBotTurn(io, lobbyCode);
 }
 
+// --- AFK turn timer ---
+
+function startHumanTurnTimer(io, lobbyCode) {
+  const lobby = getLobby(lobbyCode);
+  if (!lobby || !lobby.game) return;
+  if (lobby.game.phase === 'gameOver' || lobby.game.phase === 'scoring') return;
+
+  const currentPlayerId = lobby.game.getCurrentTurnPlayerId();
+  const currentPlayer = lobby.game.players.find(p => p.id === currentPlayerId);
+  if (!currentPlayer || currentPlayer.isBot) return;
+
+  clearTurnTimer(lobbyCode);
+
+  const timeout = getPlayerTimeout(lobbyCode, currentPlayerId);
+  const endsAt = Date.now() + timeout;
+  const afk = getAfkState(lobbyCode);
+
+  io.to(lobbyCode).emit('turn_timer', { playerId: currentPlayerId, endsAt });
+
+  afk.turnTimer = setTimeout(() => {
+    afk.turnTimer = null;
+    executeAfkTurn(io, lobbyCode, currentPlayerId);
+  }, timeout);
+}
+
+function executeAfkTurn(io, lobbyCode, playerId) {
+  const lobby = getLobby(lobbyCode);
+  if (!lobby || !lobby.game) return;
+
+  // Verify it's still this player's turn
+  const currentPlayerId = lobby.game.getCurrentTurnPlayerId();
+  if (currentPlayerId !== playerId) return;
+
+  const game = lobby.game;
+  const player = game.players.find(p => p.id === playerId);
+  if (!player) return;
+
+  // Increment AFK counter
+  const pAfk = getPlayerAfk(lobbyCode, playerId);
+  pAfk.consecutive++;
+  const firstTimeout = pAfk.consecutive === 1;
+
+  if (pAfk.consecutive >= AFK_THRESHOLD && !pAfk.isAfk) {
+    pAfk.isAfk = true;
+    io.to(lobbyCode).emit('player_afk_changed', { playerId, isAfk: true });
+  }
+
+  if (firstTimeout) {
+    const msg = addChatMessage(lobbyCode, null, `${player.name}'s turn was auto-played`);
+    io.to(lobbyCode).emit('chat_message', msg);
+  }
+
+  if (game.phase === 'bidding') {
+    // Use bot AI to pick a bid
+    const hand = game.hands[playerId];
+    const playerIndex = game.players.findIndex(p => p.id === playerId);
+    const partnerIndex = (playerIndex + 2) % 4;
+    const partnerId = game.players[partnerIndex].id;
+    const partnerBid = game.bids[partnerId];
+
+    const opp1Index = (playerIndex + 1) % 4;
+    const opp2Index = (playerIndex + 3) % 4;
+    const opponentBids = [game.bids[game.players[opp1Index].id], game.bids[game.players[opp2Index].id]];
+
+    let bid = botBid(hand, partnerBid, opponentBids, game);
+
+    // Respect double nil restriction
+    if (bid === 0 && !game.settings.doubleNil && partnerBid === 0) {
+      bid = 1;
+    }
+
+    const result = game.placeBid(playerId, bid, { blindNil: false });
+    if (result.error) return;
+
+    io.to(lobbyCode).emit('bid_placed', {
+      playerId,
+      bid,
+      blindNil: false,
+      allBidsIn: result.allBidsIn,
+      nextTurnId: result.nextTurnId,
+    });
+
+    if (result.allBidsIn) {
+      const msg2 = addChatMessage(lobbyCode, null, 'All bids are in! Let\'s play!');
+      io.to(lobbyCode).emit('chat_message', msg2);
+    }
+
+    scheduleBotTurn(io, lobbyCode);
+
+  } else if (game.phase === 'playing') {
+    const hand = game.hands[playerId];
+    const gameStateForBot = {
+      currentTrick: game.currentTrick,
+      bids: game.bids,
+      tricksTaken: game.tricksTaken,
+      players: game.players,
+      spadesBroken: game.spadesBroken,
+      cardsPlayed: game.cardsPlayed,
+    };
+
+    const card = botPlayCard(hand, gameStateForBot, playerId);
+    if (!card) return;
+
+    processCardPlay(io, lobbyCode, playerId, card);
+  }
+}
+
+function startRoundSummaryTimers(io, lobbyCode) {
+  const lobby = getLobby(lobbyCode);
+  if (!lobby || !lobby.game || !lobby.readyForNextRound) return;
+
+  const humanPlayers = lobby.game.players.filter(p => !p.isBot);
+
+  for (const player of humanPlayers) {
+    const timeout = getPlayerTimeout(lobbyCode, player.id);
+    const afk = getAfkState(lobbyCode);
+
+    const timer = setTimeout(() => {
+      afk.roundTimers.delete(player.id);
+      if (!lobby.readyForNextRound) return;
+
+      // Auto-ready this player
+      lobby.readyForNextRound.add(player.id);
+
+      // Increment AFK counter
+      const pAfk = getPlayerAfk(lobbyCode, player.id);
+      pAfk.consecutive++;
+      if (pAfk.consecutive >= AFK_THRESHOLD && !pAfk.isAfk) {
+        pAfk.isAfk = true;
+        io.to(lobbyCode).emit('player_afk_changed', { playerId: player.id, isAfk: true });
+      }
+
+      // Check if all human players are now ready
+      const allReady = humanPlayers.every(p => lobby.readyForNextRound.has(p.id));
+      if (allReady) {
+        clearRoundTimers(lobbyCode);
+        lobby.readyForNextRound = null;
+        lobby.game.startNewRound();
+
+        for (const p of lobby.game.players) {
+          if (!p.isBot) {
+            const state = lobby.game.getStateForPlayer(p.id);
+            io.to(p.id).emit('new_round', state);
+          }
+        }
+
+        // Send spectators the new round state
+        const spectators = lobby.players.filter(p => !p.team && !p.isBot);
+        for (const spec of spectators) {
+          const state = lobby.game.getStateForPlayer(spec.id);
+          io.to(spec.id).emit('new_round', state);
+        }
+
+        const msg = addChatMessage(lobbyCode, null, `Round ${lobby.game.roundNumber} - Deal 'em up!`);
+        io.to(lobbyCode).emit('chat_message', msg);
+
+        scheduleBotTurn(io, lobbyCode);
+      }
+    }, timeout);
+
+    afk.roundTimers.set(player.id, timer);
+  }
+}
+
+function startGameOverTimer(io, lobbyCode) {
+  const lobby = getLobby(lobbyCode);
+  if (!lobby) return;
+
+  const afk = getAfkState(lobbyCode);
+
+  // Use 60s default for game over return
+  afk.gameOverTimer = setTimeout(() => {
+    afk.gameOverTimer = null;
+    const currentLobby = getLobby(lobbyCode);
+    if (!currentLobby || !currentLobby.game) return;
+
+    currentLobby.game = null;
+    for (const p of currentLobby.players) {
+      p.team = null;
+    }
+
+    io.to(lobbyCode).emit('returned_to_lobby', {
+      players: currentLobby.players,
+    });
+
+    cleanupAfkState(lobbyCode);
+  }, AFK_TURN_TIMEOUT);
+}
+
 // --- Bot turn scheduling ---
 
 function scheduleBotTurn(io, lobbyCode) {
@@ -544,7 +890,11 @@ function scheduleBotTurn(io, lobbyCode) {
   const currentPlayerId = lobby.game.getCurrentTurnPlayerId();
   const currentPlayer = lobby.game.players.find(p => p.id === currentPlayerId);
 
-  if (!currentPlayer || !currentPlayer.isBot) return;
+  if (!currentPlayer || !currentPlayer.isBot) {
+    // Human player's turn — start AFK timer
+    startHumanTurnTimer(io, lobbyCode);
+    return;
+  }
 
   setTimeout(() => {
     executeBotTurn(io, lobbyCode, currentPlayerId);
@@ -575,14 +925,20 @@ function executeBotTurn(io, lobbyCode, botId) {
     const opp2Index = (botIndex + 3) % 4;
     const opponentBids = [game.bids[game.players[opp1Index].id], game.bids[game.players[opp2Index].id]];
 
-    const bid = botBid(hand, partnerBid, opponentBids, game);
+    let bid = botBid(hand, partnerBid, opponentBids, game);
 
-    const result = game.placeBid(botId, bid);
+    // Bots respect double nil restriction
+    if (bid === 0 && !game.settings.doubleNil && partnerBid === 0) {
+      bid = 1;
+    }
+
+    const result = game.placeBid(botId, bid, { blindNil: false });
     if (result.error) return; // shouldn't happen
 
     io.to(lobbyCode).emit('bid_placed', {
       playerId: botId,
       bid,
+      blindNil: false,
       allBidsIn: result.allBidsIn,
       nextTurnId: result.nextTurnId,
     });
@@ -622,12 +978,24 @@ function cancelDisconnectTimer(socketId) {
 }
 
 function permanentlyDisconnect(io, socketId) {
+  // Check if the player is a game player BEFORE removing them from lobby
+  let wasGamePlayer = false;
+  const preCheckInfo = getPlayerInfo(socketId);
+  if (preCheckInfo) {
+    const preCheckLobby = getLobby(preCheckInfo.lobbyCode);
+    if (preCheckLobby && preCheckLobby.game) {
+      wasGamePlayer = preCheckLobby.game.players.some(p => p.id === socketId);
+    }
+  }
+
   const result = leaveLobby(socketId);
   if (!result || result.disbanded) return;
 
   const lobby = getLobby(result.lobbyCode);
 
-  if (lobby && lobby.game) {
+  // Only cancel the game if a seated game player left, not a spectator
+  if (lobby && lobby.game && wasGamePlayer) {
+    cleanupAfkState(result.lobbyCode);
     lobby.game = null;
     for (const p of lobby.players) {
       p.team = null;

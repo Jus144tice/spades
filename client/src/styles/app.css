@@ -51,22 +51,22 @@ body {
   min-width: 0;
 }
 
+/* Chat — hidden by default, toggled on all screen sizes */
 .app-chat {
   display: none;
 }
 
-/* Show chat sidebar on desktop */
-@media (min-width: 769px) {
-  .app-chat {
-    display: block;
-    width: 320px;
-    border-left: 1px solid var(--border);
-    flex-shrink: 0;
-  }
+/* Desktop: sidebar */
+.app-chat.chat-open.chat-desktop {
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-/* Show chat as drawer on mobile when toggled */
-.app-chat.chat-open {
+/* Mobile: bottom drawer */
+.app-chat.chat-open.chat-mobile {
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -219,6 +219,24 @@ body {
 .modal .btn {
   display: block;
   margin: 20px auto 0;
+}
+
+.game-over-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.game-over-actions .btn {
+  margin: 0;
+  width: 100%;
+  max-width: 260px;
+}
+
+.game-over-actions .btn-ghost {
+  font-size: 13px;
 }
 
 .winner-announcement {
@@ -437,24 +455,42 @@ body {
   margin-left: auto;
 }
 
-/* Mobile chat toggle button — always display:flex since JSX conditionally renders it */
+/* Chat toggle button — visible on all screen sizes */
 .chat-toggle-btn {
   display: flex;
   position: fixed;
-  bottom: 100px;
-  right: 12px;
+  bottom: 60px;
+  right: 16px;
   z-index: 90;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--accent);
   color: #000;
   border: none;
-  font-size: 22px;
+  font-size: 20px;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   align-items: center;
   justify-content: center;
+}
+
+.chat-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #f44336;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
 }
 
 /* ===== Mobile Responsive ===== */
@@ -582,10 +618,18 @@ body {
   }
 
   .settings-btn {
-    bottom: 56px;
+    bottom: 12px;
     right: 8px;
     width: 36px;
     height: 36px;
+    font-size: 18px;
+  }
+
+  .chat-toggle-btn {
+    bottom: 56px;
+    right: 8px;
+    width: 42px;
+    height: 42px;
     font-size: 18px;
   }
 
@@ -767,6 +811,145 @@ body {
 .settings-actions .btn {
   display: inline-block;
   margin: 0;
+}
+
+/* Rules modal */
+.rules-modal {
+  max-width: 540px;
+}
+
+.rules-expand-controls {
+  text-align: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rules-expand-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
+.rules-expand-btn:hover {
+  text-decoration: underline;
+}
+
+.rules-expand-divider {
+  margin: 0 8px;
+}
+
+.rules-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rules-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rules-section-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.rules-section-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rules-chevron {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.rules-section-body {
+  padding: 4px 16px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.rules-section-body p {
+  margin: 8px 0;
+}
+
+.rules-section-body ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.rules-section-body li {
+  margin: 6px 0;
+}
+
+.rules-section-body strong {
+  color: var(--text-primary);
+}
+
+.rules-section-body em {
+  color: var(--gold);
+  font-style: normal;
+}
+
+.rules-callout {
+  background: rgba(79, 195, 247, 0.08);
+  border-left: 3px solid var(--accent);
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+  margin: 12px 0;
+  font-size: 12px;
+}
+
+.rules-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.rules-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.rules-table td:last-child {
+  text-align: right;
+  color: var(--text-primary);
+}
+
+/* "How to Play" link on join/lobby screens */
+.rules-link {
+  display: block;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  margin: 20px auto 0;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rules-link:hover {
+  color: var(--gold);
 }
 
 /* Reconnecting overlay */

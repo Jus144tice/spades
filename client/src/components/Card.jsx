@@ -1,7 +1,7 @@
 import React from 'react';
 
 const SUIT_SYMBOLS = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
-const SUIT_COLORS = { S: '#1a1a2e', H: '#e74c3c', D: '#e74c3c', C: '#1a1a2e' };
+const SUIT_COLORS = { S: '#000000', H: '#d40000', D: '#d40000', C: '#000000' };
 
 export default function Card({ card, onClick, disabled, small }) {
   if (!card) return <div className={`card card-empty ${small ? 'card-small' : ''}`} />;

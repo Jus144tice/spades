@@ -1,33 +1,91 @@
+/* Card size variables — scale up on larger screens */
+:root {
+  --card-w: 72px;
+  --card-h: 100px;
+  --card-sm-w: 56px;
+  --card-sm-h: 78px;
+  --card-radius: 8px;
+  --card-rank-size: 14px;
+  --card-suit-size: 12px;
+  --card-center-size: 28px;
+  --card-sm-rank-size: 11px;
+  --card-sm-suit-size: 10px;
+  --card-sm-center-size: 20px;
+  --card-back-icon: 24px;
+  --card-corner-top: 4px;
+  --card-corner-left: 6px;
+}
+
+/* Large desktop (1280px+) */
+@media (min-width: 1280px) {
+  :root {
+    --card-w: 86px;
+    --card-h: 120px;
+    --card-sm-w: 66px;
+    --card-sm-h: 92px;
+    --card-radius: 10px;
+    --card-rank-size: 17px;
+    --card-suit-size: 14px;
+    --card-center-size: 34px;
+    --card-sm-rank-size: 13px;
+    --card-sm-suit-size: 11px;
+    --card-sm-center-size: 24px;
+    --card-back-icon: 28px;
+    --card-corner-top: 5px;
+    --card-corner-left: 7px;
+  }
+}
+
+/* XL / 4K desktop (1920px+) */
+@media (min-width: 1920px) {
+  :root {
+    --card-w: 100px;
+    --card-h: 140px;
+    --card-sm-w: 76px;
+    --card-sm-h: 106px;
+    --card-radius: 11px;
+    --card-rank-size: 20px;
+    --card-suit-size: 16px;
+    --card-center-size: 40px;
+    --card-sm-rank-size: 15px;
+    --card-sm-suit-size: 13px;
+    --card-sm-center-size: 28px;
+    --card-back-icon: 32px;
+    --card-corner-top: 6px;
+    --card-corner-left: 8px;
+  }
+}
+
 /* Card Styles */
 .card {
-  width: 72px;
-  height: 100px;
-  border-radius: 8px;
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: var(--card-radius);
   position: relative;
   transition: transform 0.15s, box-shadow 0.15s;
   user-select: none;
 }
 
 .card-small {
-  width: 56px;
-  height: 78px;
+  width: var(--card-sm-w);
+  height: var(--card-sm-h);
 }
 
 .card-playable {
   background: var(--card-bg);
-  border: 1px solid #ddd;
+  border: 1.5px solid #c0c0c0;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.15);
 }
 
 .card-playable:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
 }
 
 .card-disabled {
   background: #e8e8e8;
-  border: 1px solid #ccc;
+  border: 1.5px solid #bbb;
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -50,7 +108,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: var(--card-back-icon);
   color: rgba(255,255,255,0.2);
 }
 
@@ -63,31 +121,31 @@
 }
 
 .top-left {
-  top: 4px;
-  left: 6px;
+  top: var(--card-corner-top);
+  left: var(--card-corner-left);
 }
 
 .bottom-right {
-  bottom: 4px;
-  right: 6px;
+  bottom: var(--card-corner-top);
+  right: var(--card-corner-left);
   transform: rotate(180deg);
 }
 
 .card-rank {
-  font-size: 14px;
+  font-size: var(--card-rank-size);
   font-weight: 700;
 }
 
 .card-small .card-rank {
-  font-size: 11px;
+  font-size: var(--card-sm-rank-size);
 }
 
 .card-suit {
-  font-size: 12px;
+  font-size: var(--card-suit-size);
 }
 
 .card-small .card-suit {
-  font-size: 10px;
+  font-size: var(--card-sm-suit-size);
 }
 
 .card-center {
@@ -96,11 +154,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: var(--card-center-size);
 }
 
 .card-small .card-center {
-  font-size: 20px;
+  font-size: var(--card-sm-center-size);
 }
 
 /* Hand */
@@ -127,61 +185,53 @@
   z-index: 10;
 }
 
-.hand-card:not(.playable) .card {
+.hand-card:not(.playable):not(.queueable):not(.queued) .card {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
+/* Queueable cards — clickable but not your turn yet */
+.hand-card.queueable .card {
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.hand-card.queueable:hover {
+  transform: translateY(-8px);
+  z-index: 10;
+}
+
+/* Queued card — raised with accent glow */
+.hand-card.queued {
+  transform: translateY(-16px);
+  z-index: 11;
+}
+
+.hand-card.queued .card {
+  cursor: pointer;
+  opacity: 1;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 12px rgba(79, 195, 247, 0.5), 0 4px 16px rgba(0,0,0,0.3);
+}
+
 /* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
-  /* Smaller cards so 13 fit in one row on ~360px screens */
-  .card {
-    width: 42px;
-    height: 59px;
-    border-radius: 5px;
-  }
-
-  .card-small {
-    width: 36px;
-    height: 50px;
-  }
-
-  .card-rank {
-    font-size: 10px;
-  }
-
-  .card-suit {
-    font-size: 8px;
-  }
-
-  .card-small .card-rank {
-    font-size: 8px;
-  }
-
-  .card-small .card-suit {
-    font-size: 7px;
-  }
-
-  .card-center {
-    font-size: 16px;
-  }
-
-  .card-small .card-center {
-    font-size: 12px;
-  }
-
-  .card-back::after {
-    font-size: 14px;
-  }
-
-  .top-left {
-    top: 2px;
-    left: 3px;
-  }
-
-  .bottom-right {
-    bottom: 2px;
-    right: 3px;
+  /* Override variables for mobile */
+  :root {
+    --card-w: 42px;
+    --card-h: 59px;
+    --card-sm-w: 36px;
+    --card-sm-h: 50px;
+    --card-radius: 5px;
+    --card-rank-size: 10px;
+    --card-suit-size: 8px;
+    --card-center-size: 16px;
+    --card-sm-rank-size: 8px;
+    --card-sm-suit-size: 7px;
+    --card-sm-center-size: 12px;
+    --card-back-icon: 14px;
+    --card-corner-top: 2px;
+    --card-corner-left: 3px;
   }
 
   /* Hide bottom-right corner in hand — prevents bleed-through from overlap */
@@ -203,9 +253,31 @@
   }
 
   /* Disabled cards: use filter instead of opacity to prevent bleed-through */
-  .hand-card:not(.playable) .card {
+  .hand-card:not(.playable):not(.queueable):not(.queued) .card {
     opacity: 1;
     filter: brightness(0.45) saturate(0.3);
+  }
+
+  /* Queueable cards on mobile */
+  .hand-card.queueable .card {
+    opacity: 1;
+    filter: brightness(0.7) saturate(0.7);
+  }
+
+  .hand-card.queueable:hover {
+    transform: none;
+    z-index: auto;
+  }
+
+  /* Queued card on mobile */
+  .hand-card.queued {
+    transform: translateY(-14px);
+    z-index: 11;
+  }
+
+  .hand-card.queued .card {
+    filter: none;
+    opacity: 1;
   }
 
   /* Disable hover lift on touch devices */

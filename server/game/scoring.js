@@ -1,18 +1,20 @@
 import {
   NIL_BONUS,
+  BLIND_NIL_BONUS,
   BOOK_PENALTY_THRESHOLD,
   BOOK_PENALTY,
   TEN_TRICK_BONUS,
   WINNING_SCORE,
 } from './constants.js';
 
-export function scoreRound(players, bids, tricksTaken, currentScores, currentBooks) {
+export function scoreRound(players, bids, tricksTaken, currentScores, currentBooks, settings = {}, blindNilPlayers = new Set()) {
   // players is the ordered array; teams: 0+2 = team1, 1+3 = team2
   const teams = {
     team1: [players[0].id, players[2].id],
     team2: [players[1].id, players[3].id],
   };
 
+  const bagThreshold = settings.bagThreshold || BOOK_PENALTY_THRESHOLD;
   const result = {};
 
   for (const [teamKey, playerIds] of Object.entries(teams)) {
@@ -25,10 +27,11 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
 
     // Score nil bids individually
     for (const pid of nilPlayers) {
+      const bonus = blindNilPlayers.has(pid) ? BLIND_NIL_BONUS : NIL_BONUS;
       if (tricksTaken[pid] === 0) {
-        roundScore += NIL_BONUS;
+        roundScore += bonus;
       } else {
-        roundScore -= NIL_BONUS;
+        roundScore -= bonus;
         // Failed nil tricks count toward partner's bid, NOT auto-booked
         failedNilTricks += tricksTaken[pid];
       }
@@ -54,17 +57,19 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
       books += failedNilTricks;
     }
 
-    // 10+ trick bonus (total team tricks including nil players)
-    const totalTeamTricks = playerIds.reduce((sum, id) => sum + tricksTaken[id], 0);
-    if (totalTeamTricks >= 10 && combinedBid > 0 && effectiveTricks >= combinedBid) {
-      roundScore += TEN_TRICK_BONUS;
+    // 10+ trick bonus (only if setting is enabled)
+    if (settings.tenBidBonus) {
+      const totalTeamTricks = playerIds.reduce((sum, id) => sum + tricksTaken[id], 0);
+      if (totalTeamTricks >= 10 && combinedBid > 0 && effectiveTricks >= combinedBid) {
+        roundScore += TEN_TRICK_BONUS;
+      }
     }
 
     // Book penalty
-    if (books >= BOOK_PENALTY_THRESHOLD) {
-      const penaltyCount = Math.floor(books / BOOK_PENALTY_THRESHOLD);
+    if (books >= bagThreshold) {
+      const penaltyCount = Math.floor(books / bagThreshold);
       roundScore -= penaltyCount * BOOK_PENALTY;
-      books = books % BOOK_PENALTY_THRESHOLD;
+      books = books % bagThreshold;
     }
 
     result[teamKey] = {
@@ -77,9 +82,10 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
   return result;
 }
 
-export function checkWinner(scores) {
-  const t1 = scores.team1 >= WINNING_SCORE;
-  const t2 = scores.team2 >= WINNING_SCORE;
+export function checkWinner(scores, winTarget) {
+  const target = winTarget || WINNING_SCORE;
+  const t1 = scores.team1 >= target;
+  const t2 = scores.team2 >= target;
 
   if (t1 && t2) {
     if (scores.team1 === scores.team2) return null; // tie - play another round

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 
@@ -6,11 +6,33 @@ const NIL_BONUS = 100;
 const TEN_TRICK_BONUS = 50;
 const BOOK_PENALTY_THRESHOLD = 10;
 const BOOK_PENALTY = 100;
+const AFK_TURN_TIMEOUT = 60;
+const AFK_FAST_TIMEOUT = 5;
 
 export default function RoundSummaryModal() {
   const { state, dispatch } = useGame();
   const socket = useSocket();
   const summary = state.roundSummary;
+
+  const isAfk = state.afkPlayers[state.playerId];
+  const timerDuration = isAfk ? AFK_FAST_TIMEOUT : AFK_TURN_TIMEOUT;
+  const [countdown, setCountdown] = useState(timerDuration);
+
+  useEffect(() => {
+    if (!summary) return;
+    setCountdown(timerDuration);
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [summary, timerDuration]);
+
   if (!summary) return null;
 
   const team1Players = state.players.filter(p => p.team === 1);
@@ -25,8 +47,8 @@ export default function RoundSummaryModal() {
   };
 
   return (
-    <div className="modal-overlay" onClick={handleContinue}>
-      <div className="modal round-summary-modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal round-summary-modal">
         <h2>Round {summary.roundNumber} Results</h2>
 
         <TeamSummary
@@ -50,7 +72,7 @@ export default function RoundSummaryModal() {
         />
 
         <button className="btn btn-primary" onClick={handleContinue}>
-          Continue
+          Continue {countdown > 0 ? `(${countdown}s)` : ''}
         </button>
       </div>
     </div>

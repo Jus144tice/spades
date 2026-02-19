@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import Card from './Card.jsx';
 
-export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken }) {
+export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken, queuedCard, onQueueCard, canQueue }) {
   const [touchedIndex, setTouchedIndex] = useState(null);
 
-  const canPlayCard = (card) => {
-    if (!isMyTurn) return false;
-
-    // If leading
+  const isLegalPlay = (card) => {
+    // Leading
     if (currentTrick.length === 0) {
       if (card.suit === 'S' && !spadesBroken) {
         return cards.every(c => c.suit === 'S');
@@ -23,7 +21,16 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
     return true;
   };
 
-  const handleTouch = (card, index, playable) => {
+  const canPlayCard = (card) => isMyTurn && isLegalPlay(card);
+  const canQueueCard = (card) => canQueue && isLegalPlay(card);
+  const isQueued = (card) => queuedCard && queuedCard.suit === card.suit && queuedCard.rank === card.rank;
+
+  const handleTouch = (card, index, playable, queueable) => {
+    if (queueable) {
+      // Single tap to toggle queue
+      onQueueCard(card);
+      return;
+    }
     if (!playable) return;
     if (touchedIndex === index) {
       // Second tap — play the card
@@ -39,20 +46,22 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
     <div className="hand">
       {cards.map((card, i) => {
         const playable = canPlayCard(card);
+        const queueable = canQueueCard(card);
+        const queued = isQueued(card);
         return (
           <div
             key={`${card.suit}${card.rank}`}
-            className={`hand-card ${playable ? 'playable' : ''} ${touchedIndex === i ? 'touched' : ''}`}
+            className={`hand-card ${playable ? 'playable' : ''} ${queueable ? 'queueable' : ''} ${queued ? 'queued' : ''} ${touchedIndex === i ? 'touched' : ''}`}
             style={{ '--i': i, '--total': cards.length }}
             onTouchEnd={(e) => {
               e.preventDefault();
-              handleTouch(card, i, playable);
+              handleTouch(card, i, playable, queueable);
             }}
           >
             <Card
               card={card}
-              onClick={onPlayCard}
-              disabled={!playable}
+              onClick={queueable ? onQueueCard : onPlayCard}
+              disabled={!playable && !queueable}
             />
           </div>
         );

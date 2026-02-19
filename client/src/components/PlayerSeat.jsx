@@ -1,6 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner }) {
+function TurnCountdown({ endsAt }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+
+  useEffect(() => {
+    setSecondsLeft(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining <= 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [endsAt]);
+
+  const colorClass = secondsLeft > 30 ? '' : secondsLeft > 10 ? 'warning' : 'critical';
+
+  return (
+    <div className={`turn-countdown ${colorClass}`}>
+      {secondsLeft}s
+    </div>
+  );
+}
+
+export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner, turnTimer, isAfk }) {
   if (!player) return null;
 
   const trickCount = tricks || 0;
@@ -8,13 +30,16 @@ export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDeale
   const isNil = bid === 0;
   const overUnder = hasBid && !isNil ? trickCount - bid : null;
 
+  const showTimer = turnTimer && turnTimer.playerId === player.id;
+
   return (
-    <div className={`player-seat ${isCurrentTurn ? 'active-turn' : ''} ${isMe ? 'is-me' : ''} ${isLastTrickWinner ? 'trick-winner' : ''}`}>
+    <div className={`player-seat ${isCurrentTurn ? 'active-turn' : ''} ${isMe ? 'is-me' : ''} ${isLastTrickWinner ? 'trick-winner' : ''} ${isAfk ? 'is-afk' : ''}`}>
       {isDealer && (
         <div className="dealer-chip" title="Dealer">
           <span className="dealer-chip-icon">D</span>
         </div>
       )}
+      {isAfk && <div className="afk-badge">AFK</div>}
       <div className="player-seat-name">
         {player.name}
       </div>
@@ -24,6 +49,7 @@ export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDeale
           <span className="turn-text">{hasBid ? 'Playing' : 'Bidding'}</span>
         </div>
       )}
+      {showTimer && <TurnCountdown endsAt={turnTimer.endsAt} />}
       {hasBid ? (
         <div className="player-bid-tricks">
           <div className={`bid-display ${isNil ? 'nil-bid' : ''}`}>

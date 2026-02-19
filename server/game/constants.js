@@ -17,5 +17,20 @@ export const WINNING_SCORE = 500;
 export const BOOK_PENALTY_THRESHOLD = 10;
 export const BOOK_PENALTY = 100;
 export const NIL_BONUS = 100;
+export const BLIND_NIL_BONUS = 200;
 export const TEN_TRICK_BONUS = 50;
 export const RECONNECT_TIMEOUT_MS = 60000;
+
+// AFK timer constants
+export const AFK_TURN_TIMEOUT = 60000;  // 60s normal turn timer
+export const AFK_FAST_TIMEOUT = 5000;   // 5s for AFK players
+export const AFK_THRESHOLD = 3;         // consecutive timeouts before switching to fast
+
+export const DEFAULT_GAME_SETTINGS = {
+  winTarget: 500,
+  bagThreshold: 10,
+  blindNil: false,
+  doubleNil: false,
+  moonshot: false,
+  tenBidBonus: false,
+};

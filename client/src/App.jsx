@@ -8,6 +8,7 @@ import GameScreen from './screens/GameScreen.jsx';
 import SetupScreen from './components/SetupScreen.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import Chat from './components/Chat.jsx';
+import RulesModal from './components/RulesModal.jsx';
 import ErrorToast from './components/ErrorToast.jsx';
 
 function useIsMobile() {
@@ -48,8 +49,34 @@ function AppContent() {
   const { hasCompletedSetup, loading: prefsLoading } = usePreferences();
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const isMobile = useIsMobile();
-  const showChat = !isMobile || chatOpen;
+  const chatOpenRef = React.useRef(chatOpen);
+  chatOpenRef.current = chatOpen;
+  const prevMsgCountRef = React.useRef(state.chatMessages.length);
+
+  // Track unread messages when chat is hidden
+  useEffect(() => {
+    const prevCount = prevMsgCountRef.current;
+    const newCount = state.chatMessages.length;
+    if (newCount > prevCount && !chatOpenRef.current) {
+      setUnreadCount(prev => prev + (newCount - prevCount));
+    }
+    prevMsgCountRef.current = newCount;
+  }, [state.chatMessages.length]);
+
+  // Clear unread when chat is opened
+  useEffect(() => {
+    if (chatOpen) setUnreadCount(0);
+  }, [chatOpen]);
+
+  // Listen for rules modal open events from child screens
+  useEffect(() => {
+    const handler = () => setRulesOpen(true);
+    window.addEventListener('open-rules', handler);
+    return () => window.removeEventListener('open-rules', handler);
+  }, []);
 
   if (authLoading || prefsLoading) {
     return (
@@ -79,20 +106,21 @@ function AppContent() {
       </div>
       {state.screen !== 'join' && (
         <>
-          {showChat && (
-            <div className={`app-chat ${chatOpen ? 'chat-open' : ''}`}>
+          {chatOpen && (
+            <div className={`app-chat chat-open ${isMobile ? 'chat-mobile' : 'chat-desktop'}`}>
               <Chat />
             </div>
           )}
-          {isMobile && (
-            <button
-              className="chat-toggle-btn"
-              onClick={() => setChatOpen(prev => !prev)}
-              aria-label="Toggle chat"
-            >
-              {chatOpen ? '\u2715' : '\uD83D\uDCAC'}
-            </button>
-          )}
+          <button
+            className="chat-toggle-btn"
+            onClick={() => setChatOpen(prev => !prev)}
+            aria-label="Toggle chat"
+          >
+            {chatOpen ? '\u2715' : '\uD83D\uDCAC'}
+            {!chatOpen && unreadCount > 0 && (
+              <span className="chat-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+            )}
+          </button>
         </>
       )}
       <button
@@ -104,6 +132,7 @@ function AppContent() {
         {'\u2699'}
       </button>
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
       {state.reconnecting && (
         <div className="reconnecting-overlay">
           <div className="reconnecting-content">

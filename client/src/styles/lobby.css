@@ -156,6 +156,10 @@
   margin-bottom: 16px;
 }
 
+.spectator-count {
+  opacity: 0.7;
+}
+
 /* Team Picker */
 .team-picker {
   margin-bottom: 24px;
@@ -303,6 +307,189 @@
 
 .chat-input input:focus {
   border-color: var(--accent);
+}
+
+/* Game Settings Panel */
+.game-settings-panel {
+  margin-bottom: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.game-settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.game-settings-header:hover {
+  color: var(--text-primary);
+}
+
+.settings-chevron {
+  font-size: 10px;
+}
+
+.game-settings-body {
+  padding: 0 16px 16px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-label {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.settings-label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.settings-number {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.settings-step {
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-step:hover {
+  background: var(--bg-hover);
+}
+
+.settings-value {
+  min-width: 48px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-value-readonly {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Toggle switch */
+.settings-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.settings-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.settings-toggle.on .toggle-knob {
+  transform: translateX(20px);
+}
+
+.settings-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-badge.on {
+  background: rgba(79, 195, 247, 0.15);
+  color: var(--accent);
+}
+
+.settings-badge.off {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+/* Blind Nil bid button */
+.blind-nil-btn {
+  width: auto !important;
+  padding: 0 12px !important;
+  color: #ff9800 !important;
+  border-color: #ff9800 !important;
+}
+
+.blind-nil-btn.selected {
+  background: #ff9800 !important;
+  color: #000 !important;
 }
 
 /* ===== Mobile Responsive ===== */

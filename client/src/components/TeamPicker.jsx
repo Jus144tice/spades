@@ -46,7 +46,7 @@ export default function TeamPicker({ onRemoveBot }) {
     <div className="team-picker">
       {unassigned.length > 0 && (
         <div className="team-group">
-          <h3>Unassigned</h3>
+          <h3>{team1.length + team2.length >= 4 ? 'Spectators' : 'Unassigned'}</h3>
           {unassigned.map(renderPlayer)}
         </div>
       )}

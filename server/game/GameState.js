@@ -1,19 +1,21 @@
 import { createDeck, shuffle, deal } from './deck.js';
 import { validatePlay, determineTrickWinner } from './tricks.js';
 import { scoreRound, checkWinner } from './scoring.js';
-import { RANK_VALUE } from './constants.js';
+import { RANK_VALUE, DEFAULT_GAME_SETTINGS } from './constants.js';
 import { parseCardSort, DEFAULTS } from './preferences.js';
 
 export class GameState {
-  constructor(players, playerPreferences = {}) {
+  constructor(players, playerPreferences = {}, gameSettings = {}) {
     // players: [{ id, name, team }] - ordered so 0+2=team1, 1+3=team2
     this.players = players;
     // playerPreferences: { playerId: { cardSort, tableColor } }
     this.playerPreferences = playerPreferences;
+    this.settings = { ...DEFAULT_GAME_SETTINGS, ...gameSettings };
     this.phase = 'bidding'; // bidding | playing | scoring | gameOver
     this.dealerIndex = Math.floor(Math.random() * 4);
     this.hands = {};
     this.bids = {};
+    this.blindNilPlayers = new Set();
     this.currentTrick = [];
     this.tricksTaken = {};
     this.currentTurnIndex = -1;
@@ -33,6 +35,7 @@ export class GameState {
     this.roundNumber++;
     this.phase = 'bidding';
     this.bids = {};
+    this.blindNilPlayers = new Set();
     this.tricksTaken = {};
     this.currentTrick = [];
     this.spadesBroken = false;
@@ -72,7 +75,7 @@ export class GameState {
     return this.players[this.currentTurnIndex].id;
   }
 
-  placeBid(playerId, bid) {
+  placeBid(playerId, bid, options = {}) {
     if (this.phase !== 'bidding') {
       return { error: 'Not in bidding phase' };
     }
@@ -83,7 +86,30 @@ export class GameState {
       return { error: 'Bid must be 0-13' };
     }
 
+    // Blind nil validation
+    if (options.blindNil) {
+      if (!this.settings.blindNil) {
+        return { error: 'Blind nil is not enabled' };
+      }
+      if (bid !== 0) {
+        return { error: 'Blind nil must be a nil bid' };
+      }
+    }
+
+    // Double nil validation
+    if (bid === 0 && !this.settings.doubleNil) {
+      const playerIndex = this.players.findIndex(p => p.id === playerId);
+      const partnerIndex = (playerIndex + 2) % 4;
+      const partnerId = this.players[partnerIndex].id;
+      if (this.bids[partnerId] === 0) {
+        return { error: 'Double nil is not allowed in this game' };
+      }
+    }
+
     this.bids[playerId] = bid;
+    if (options.blindNil) {
+      this.blindNilPlayers.add(playerId);
+    }
 
     // Check if all bids are in
     if (Object.keys(this.bids).length === 4) {
@@ -168,12 +194,51 @@ export class GameState {
   endRound(lastTrickWinnerId, lastTrick) {
     this.phase = 'scoring';
 
+    // Moonshot check: team bids 13 combined and takes all 13 tricks = instant win
+    if (this.settings.moonshot) {
+      const teams = {
+        team1: [this.players[0].id, this.players[2].id],
+        team2: [this.players[1].id, this.players[3].id],
+      };
+      for (const [teamKey, playerIds] of Object.entries(teams)) {
+        const combinedBid = playerIds.reduce((sum, id) => sum + this.bids[id], 0);
+        const combinedTricks = playerIds.reduce((sum, id) => sum + this.tricksTaken[id], 0);
+        if (combinedBid === 13 && combinedTricks === 13) {
+          this.phase = 'gameOver';
+          const roundSummary = {
+            roundNumber: this.roundNumber,
+            bids: { ...this.bids },
+            tricksTaken: { ...this.tricksTaken },
+            team1Score: teamKey === 'team1' ? 'MOONSHOT' : 0,
+            team2Score: teamKey === 'team2' ? 'MOONSHOT' : 0,
+            team1Total: this.scores.team1,
+            team2Total: this.scores.team2,
+            team1Books: this.books.team1,
+            team2Books: this.books.team2,
+            moonshot: teamKey,
+          };
+          this.roundHistory.push(roundSummary);
+          return {
+            trickComplete: true,
+            trick: lastTrick,
+            winnerId: lastTrickWinnerId,
+            roundOver: true,
+            roundSummary,
+            gameOver: true,
+            winningTeam: teamKey,
+          };
+        }
+      }
+    }
+
     const roundResult = scoreRound(
       this.players,
       this.bids,
       this.tricksTaken,
       this.scores,
-      this.books
+      this.books,
+      this.settings,
+      this.blindNilPlayers
     );
 
     // Update totals
@@ -197,7 +262,7 @@ export class GameState {
     this.roundHistory.push(roundSummary);
 
     // Check winner
-    const winner = checkWinner(this.scores);
+    const winner = checkWinner(this.scores, this.settings.winTarget);
     if (winner) {
       this.phase = 'gameOver';
       return {
@@ -242,6 +307,7 @@ export class GameState {
       roundNumber: this.roundNumber,
       roundHistory: this.roundHistory,
       players: this.players.map(p => ({ id: p.id, name: p.name, team: p.team, seatIndex: p.seatIndex, isBot: p.isBot || false })),
+      gameSettings: this.settings,
     };
   }
 }

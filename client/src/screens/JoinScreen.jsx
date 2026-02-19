@@ -113,6 +113,9 @@ export default function JoinScreen() {
             </div>
           </>
         )}
+        <button className="rules-link" onClick={() => window.dispatchEvent(new Event('open-rules'))}>
+          How to Play
+        </button>
       </div>
     </div>
   );

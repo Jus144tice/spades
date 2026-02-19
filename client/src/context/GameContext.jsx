@@ -32,6 +32,10 @@ const initialState = {
   trickWonPending: false,
   errorMessage: null,
   reconnecting: false,
+  isSpectator: false,
+  gameSettings: null,
+  turnTimer: null,
+  afkPlayers: {},
 };
 
 function gameReducer(state, action) {
@@ -48,6 +52,7 @@ function gameReducer(state, action) {
         players: action.data.players,
         isHost: true,
         reconnecting: false,
+        gameSettings: action.data.gameSettings || null,
       };
 
     case 'LOBBY_JOINED':
@@ -64,6 +69,7 @@ function gameReducer(state, action) {
           timestamp: m.timestamp,
         })),
         reconnecting: false,
+        gameSettings: action.data.gameSettings || null,
       };
 
     case 'PLAYER_JOINED':
@@ -119,6 +125,10 @@ function gameReducer(state, action) {
         gameOverData: null,
         roundSummary: null,
         reconnecting: false,
+        isSpectator: action.data.isSpectator || false,
+        gameSettings: action.data.gameSettings || state.gameSettings,
+        turnTimer: null,
+        afkPlayers: {},
       };
 
     case 'BID_PLACED':
@@ -127,6 +137,7 @@ function gameReducer(state, action) {
         bids: { ...state.bids, [action.data.playerId]: action.data.bid },
         currentTurnId: action.data.nextTurnId,
         phase: action.data.allBidsIn ? 'playing' : 'bidding',
+        turnTimer: null,
       };
 
     case 'CARD_PLAYED': {
@@ -144,6 +155,7 @@ function gameReducer(state, action) {
         spadesBroken: state.spadesBroken || action.data.card.suit === 'S',
         lastTrickWinner: state.trickWonPending ? null : state.lastTrickWinner,
         trickWonPending: false,
+        turnTimer: null,
       };
     }
 
@@ -190,6 +202,7 @@ function gameReducer(state, action) {
         roundNumber: action.data.roundNumber,
         roundSummary: null,
         lastTrickWinner: null,
+        turnTimer: null,
       };
 
     case 'GAME_OVER':
@@ -213,6 +226,9 @@ function gameReducer(state, action) {
         gameOverData: null,
         roundHistory: [],
         players: action.data.players,
+        isSpectator: false,
+        turnTimer: null,
+        afkPlayers: {},
       };
 
     case 'ERROR':
@@ -223,6 +239,25 @@ function gameReducer(state, action) {
 
     case 'CLEAR_ROUND_SUMMARY':
       return { ...state, roundSummary: null };
+
+    case 'GAME_SETTINGS_UPDATED':
+      return { ...state, gameSettings: action.data };
+
+    case 'TURN_TIMER':
+      return { ...state, turnTimer: { playerId: action.data.playerId, endsAt: action.data.endsAt } };
+
+    case 'TURN_TIMER_CLEAR':
+      return { ...state, turnTimer: null };
+
+    case 'PLAYER_AFK_CHANGED': {
+      const newAfk = { ...state.afkPlayers };
+      if (action.data.isAfk) {
+        newAfk[action.data.playerId] = true;
+      } else {
+        delete newAfk[action.data.playerId];
+      }
+      return { ...state, afkPlayers: newAfk };
+    }
 
     case 'LEAVE':
       return { ...initialState };
@@ -263,6 +298,8 @@ function gameReducer(state, action) {
           gameOverData: d.gameOverData || null,
           lastTrickWinner: null,
           trickWonPending: false,
+          isSpectator: d.isSpectator || false,
+          gameSettings: d.gameSettings || state.gameSettings,
           reconnecting: false,
         };
       }
@@ -275,6 +312,7 @@ function gameReducer(state, action) {
         players: d.players,
         isHost: d.isHost,
         chatMessages,
+        gameSettings: d.gameSettings || state.gameSettings,
         reconnecting: false,
       };
     }
@@ -319,6 +357,10 @@ export function GameProvider({ children }) {
       new_round: (data) => dispatch({ type: 'NEW_ROUND', data }),
       game_over: (data) => dispatch({ type: 'GAME_OVER', data }),
       returned_to_lobby: (data) => dispatch({ type: 'RETURNED_TO_LOBBY', data }),
+      game_settings_updated: (data) => dispatch({ type: 'GAME_SETTINGS_UPDATED', data }),
+      turn_timer: (data) => dispatch({ type: 'TURN_TIMER', data }),
+      turn_timer_clear: () => dispatch({ type: 'TURN_TIMER_CLEAR' }),
+      player_afk_changed: (data) => dispatch({ type: 'PLAYER_AFK_CHANGED', data }),
       error_msg: (data) => dispatch({ type: 'ERROR', data }),
       rejoin_success: (data) => dispatch({ type: 'REJOIN_SUCCESS', data }),
       rejoin_failed: () => dispatch({ type: 'REJOIN_FAILED' }),
