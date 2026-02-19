@@ -478,37 +478,48 @@ function processCardPlay(io, lobbyCode, playerId, card) {
     });
 
     if (result.roundOver) {
-      io.to(lobbyCode).emit('round_scored', {
-        roundSummary: result.roundSummary,
-        scores: lobby.game.scores,
-        books: lobby.game.books,
-      });
+      // Delay round results so players can see the last trick before the modal appears
+      const roundSummary = result.roundSummary;
+      const gameOver = result.gameOver;
+      const winningTeam = result.winningTeam;
+      const scores = { ...lobby.game.scores };
+      const books = { ...lobby.game.books };
+      const roundHistory = [...lobby.game.roundHistory];
+      const gamePlayers = lobby.game.players;
 
-      if (result.gameOver) {
-        const winTeamPlayers = lobby.game.players
-          .filter(p => p.team === (result.winningTeam === 'team1' ? 1 : 2))
-          .map(p => p.name);
-
-        io.to(lobbyCode).emit('game_over', {
-          winningTeam: result.winningTeam,
-          winningPlayers: winTeamPlayers,
-          finalScores: lobby.game.scores,
-          roundHistory: lobby.game.roundHistory,
+      setTimeout(() => {
+        io.to(lobbyCode).emit('round_scored', {
+          roundSummary,
+          scores,
+          books,
         });
 
-        const msg = addChatMessage(lobbyCode, null, `Game over! ${winTeamPlayers.join(' & ')} win!`);
-        io.to(lobbyCode).emit('chat_message', msg);
+        if (gameOver) {
+          const winTeamPlayers = gamePlayers
+            .filter(p => p.team === (winningTeam === 'team1' ? 1 : 2))
+            .map(p => p.name);
 
-        // Save game results to database (fire-and-forget)
-        saveGameResults(lobby.game, result.winningTeam).catch(err => {
-          console.error('Failed to save game results:', err);
-        });
+          io.to(lobbyCode).emit('game_over', {
+            winningTeam,
+            winningPlayers: winTeamPlayers,
+            finalScores: scores,
+            roundHistory,
+          });
 
-        return; // No more bot turns needed
-      } else {
-        // Wait for human players to dismiss the round summary before starting next round
-        lobby.readyForNextRound = new Set();
-      }
+          const msg = addChatMessage(lobbyCode, null, `Game over! ${winTeamPlayers.join(' & ')} win!`);
+          io.to(lobbyCode).emit('chat_message', msg);
+
+          // Save game results to database (fire-and-forget)
+          saveGameResults(lobby.game, winningTeam).catch(err => {
+            console.error('Failed to save game results:', err);
+          });
+        } else {
+          // Wait for human players to dismiss the round summary before starting next round
+          lobby.readyForNextRound = new Set();
+        }
+      }, TRICK_DISPLAY_DELAY);
+
+      return; // No bot turns needed — round is over
     }
 
     // After a completed trick, wait for the display delay before next bot turn
