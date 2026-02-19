@@ -31,6 +31,7 @@ const initialState = {
   lastTrickWinner: null,
   trickWonPending: false,
   errorMessage: null,
+  reconnecting: false,
 };
 
 function gameReducer(state, action) {
@@ -46,6 +47,7 @@ function gameReducer(state, action) {
         lobbyCode: action.data.lobbyCode,
         players: action.data.players,
         isHost: true,
+        reconnecting: false,
       };
 
     case 'LOBBY_JOINED':
@@ -61,6 +63,7 @@ function gameReducer(state, action) {
           message: m.message,
           timestamp: m.timestamp,
         })),
+        reconnecting: false,
       };
 
     case 'PLAYER_JOINED':
@@ -115,6 +118,7 @@ function gameReducer(state, action) {
         roundHistory: action.data.roundHistory,
         gameOverData: null,
         roundSummary: null,
+        reconnecting: false,
       };
 
     case 'BID_PLACED':
@@ -223,6 +227,61 @@ function gameReducer(state, action) {
     case 'LEAVE':
       return { ...initialState };
 
+    case 'SET_RECONNECTING':
+      return { ...state, reconnecting: action.value };
+
+    case 'REJOIN_SUCCESS': {
+      const d = action.data;
+      const chatMessages = (d.chatLog || []).map(m => ({
+        sender: m.sender,
+        message: m.message,
+        timestamp: m.timestamp,
+      }));
+
+      if (d.screen === 'game') {
+        return {
+          ...state,
+          screen: 'game',
+          playerId: d.playerId,
+          lobbyCode: d.lobbyCode,
+          players: d.players,
+          isHost: d.isHost,
+          chatMessages,
+          phase: d.phase,
+          hand: d.hand,
+          bids: d.bids,
+          currentTrick: d.currentTrick,
+          tricksTaken: d.tricksTaken,
+          scores: d.scores,
+          books: d.books,
+          currentTurnId: d.currentTurnId,
+          dealerIndex: d.dealerIndex,
+          spadesBroken: d.spadesBroken,
+          roundNumber: d.roundNumber,
+          roundHistory: d.roundHistory,
+          roundSummary: d.roundSummary || null,
+          gameOverData: d.gameOverData || null,
+          lastTrickWinner: null,
+          trickWonPending: false,
+          reconnecting: false,
+        };
+      }
+      // Lobby rejoin
+      return {
+        ...state,
+        screen: 'lobby',
+        playerId: d.playerId,
+        lobbyCode: d.lobbyCode,
+        players: d.players,
+        isHost: d.isHost,
+        chatMessages,
+        reconnecting: false,
+      };
+    }
+
+    case 'REJOIN_FAILED':
+      return { ...initialState };
+
     default:
       return state;
   }
@@ -232,6 +291,8 @@ export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const socket = useSocket();
   const trickTimerRef = useRef(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     if (!socket) return;
@@ -259,16 +320,40 @@ export function GameProvider({ children }) {
       game_over: (data) => dispatch({ type: 'GAME_OVER', data }),
       returned_to_lobby: (data) => dispatch({ type: 'RETURNED_TO_LOBBY', data }),
       error_msg: (data) => dispatch({ type: 'ERROR', data }),
+      rejoin_success: (data) => dispatch({ type: 'REJOIN_SUCCESS', data }),
+      rejoin_failed: () => dispatch({ type: 'REJOIN_FAILED' }),
     };
 
     for (const [event, handler] of Object.entries(handlers)) {
       socket.on(event, handler);
     }
 
+    // Handle disconnect/reconnect
+    const onDisconnect = () => {
+      const s = stateRef.current;
+      // Only show reconnecting if we're in a lobby or game
+      if (s.lobbyCode) {
+        dispatch({ type: 'SET_RECONNECTING', value: true });
+      }
+    };
+
+    const onConnect = () => {
+      const s = stateRef.current;
+      // If we had a lobby/game session, try to rejoin
+      if (s.lobbyCode && s.reconnecting) {
+        socket.emit('rejoin', { lobbyCode: s.lobbyCode });
+      }
+    };
+
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect', onConnect);
+
     return () => {
       for (const [event, handler] of Object.entries(handlers)) {
         socket.off(event, handler);
       }
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect', onConnect);
       if (trickTimerRef.current) clearTimeout(trickTimerRef.current);
     };
   }, [socket]);

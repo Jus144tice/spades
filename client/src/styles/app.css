@@ -768,3 +768,39 @@ body {
   display: inline-block;
   margin: 0;
 }
+
+/* Reconnecting overlay */
+.reconnecting-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.reconnecting-content {
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.reconnecting-content p {
+  margin-top: 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.reconnecting-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

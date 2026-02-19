@@ -104,6 +104,14 @@ function AppContent() {
         {'\u2699'}
       </button>
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {state.reconnecting && (
+        <div className="reconnecting-overlay">
+          <div className="reconnecting-content">
+            <div className="reconnecting-spinner" />
+            <p>Reconnecting...</p>
+          </div>
+        </div>
+      )}
       <ErrorToast />
     </div>
   );

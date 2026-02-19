@@ -193,6 +193,14 @@ export function arrangeSeating(players) {
   return seated;
 }
 
+export function findPlayerByUserId(userId) {
+  for (const [code, lobby] of lobbies) {
+    const player = lobby.players.find(p => p.userId === userId);
+    if (player) return { player, lobbyCode: code, lobby };
+  }
+  return null;
+}
+
 export function updatePlayerSocket(oldSocketId, newSocketId, lobbyCode) {
   const lobby = lobbies.get(lobbyCode);
   if (!lobby) return false;
@@ -211,12 +219,18 @@ export function updatePlayerSocket(oldSocketId, newSocketId, lobbyCode) {
     playerSockets.set(newSocketId, info);
   }
 
+  // Update readyForNextRound set if it exists
+  if (lobby.readyForNextRound && lobby.readyForNextRound.has(oldSocketId)) {
+    lobby.readyForNextRound.delete(oldSocketId);
+    lobby.readyForNextRound.add(newSocketId);
+  }
+
   // Update game state if active
   if (lobby.game) {
     const gamePlayer = lobby.game.players.find(p => p.id === oldSocketId);
     if (gamePlayer) {
       gamePlayer.id = newSocketId;
-      // Move hand to new id
+      // Move hand
       if (lobby.game.hands[oldSocketId]) {
         lobby.game.hands[newSocketId] = lobby.game.hands[oldSocketId];
         delete lobby.game.hands[oldSocketId];
@@ -231,9 +245,18 @@ export function updatePlayerSocket(oldSocketId, newSocketId, lobbyCode) {
         lobby.game.tricksTaken[newSocketId] = lobby.game.tricksTaken[oldSocketId];
         delete lobby.game.tricksTaken[oldSocketId];
       }
+      // Move player preferences
+      if (lobby.game.playerPreferences[oldSocketId]) {
+        lobby.game.playerPreferences[newSocketId] = lobby.game.playerPreferences[oldSocketId];
+        delete lobby.game.playerPreferences[oldSocketId];
+      }
       // Update current trick
       for (const t of lobby.game.currentTrick) {
         if (t.playerId === oldSocketId) t.playerId = newSocketId;
+      }
+      // Update cards played history
+      for (const c of lobby.game.cardsPlayed) {
+        if (c.playerId === oldSocketId) c.playerId = newSocketId;
       }
     }
   }

@@ -11,6 +11,8 @@ import {
   arrangeSeating,
   addBot,
   removeBot,
+  findPlayerByUserId,
+  updatePlayerSocket,
 } from './lobby.js';
 import { GameState } from './game/GameState.js';
 import { botBid, botPlayCard } from './botAI.js';
@@ -21,6 +23,10 @@ import { mergeWithDefaults } from './game/preferences.js';
 const BOT_DELAY_MIN = 800;
 const BOT_DELAY_MAX = 2000;
 const TRICK_DISPLAY_DELAY = 1800; // must be >= client's TRICK_DISPLAY_DELAY
+const RECONNECT_GRACE_PERIOD = 60000; // 60s before permanently removing a disconnected player
+
+// Track disconnect grace period timers: oldSocketId -> { timer, lobbyCode, userId, playerName }
+const disconnectTimers = new Map();
 
 function botDelay() {
   return BOT_DELAY_MIN + Math.random() * (BOT_DELAY_MAX - BOT_DELAY_MIN);
@@ -319,12 +325,129 @@ export function registerHandlers(io, socket) {
     });
   });
 
-  socket.on('leave_lobby', () => {
-    handleDisconnect(io, socket);
+  // --- Rejoin after reconnection ---
+  socket.on('rejoin', ({ lobbyCode }) => {
+    const userId = socket.userId;
+    if (!userId || !lobbyCode) {
+      socket.emit('rejoin_failed');
+      return;
+    }
+
+    const lobby = getLobby(lobbyCode);
+    if (!lobby) {
+      socket.emit('rejoin_failed');
+      return;
+    }
+
+    // Find the player in this lobby by userId
+    const player = lobby.players.find(p => p.userId === userId);
+    if (!player) {
+      socket.emit('rejoin_failed');
+      return;
+    }
+
+    const oldSocketId = player.id;
+
+    // Cancel the grace period timer if one is running
+    const timerInfo = disconnectTimers.get(oldSocketId);
+    if (timerInfo) {
+      clearTimeout(timerInfo.timer);
+      disconnectTimers.delete(oldSocketId);
+    }
+
+    // Remap all socket IDs (lobby, game state, hands, bids, etc.)
+    updatePlayerSocket(oldSocketId, socket.id, lobbyCode);
+
+    // Join the socket room
+    socket.join(lobbyCode);
+
+    console.log(`Player ${player.name} rejoined (${oldSocketId} -> ${socket.id})`);
+
+    const msg = addChatMessage(lobbyCode, null, `${player.name} reconnected`);
+    io.to(lobbyCode).emit('chat_message', msg);
+    io.to(lobbyCode).emit('player_reconnected', { playerId: socket.id });
+
+    // Send current state back to the rejoining player
+    if (lobby.game) {
+      const gameState = lobby.game.getStateForPlayer(socket.id);
+      // Include round summary if we're in scoring phase
+      const roundSummary = lobby.game.phase === 'scoring'
+        ? lobby.game.roundHistory[lobby.game.roundHistory.length - 1]
+        : null;
+      // Include game over data if applicable
+      let gameOverData = null;
+      if (lobby.game.phase === 'gameOver') {
+        const winner = lobby.game.scores.team1 >= 500 ? 'team1' : 'team2';
+        const winTeamPlayers = lobby.game.players
+          .filter(p => p.team === (winner === 'team1' ? 1 : 2))
+          .map(p => p.name);
+        gameOverData = {
+          winningTeam: winner,
+          winningPlayers: winTeamPlayers,
+          finalScores: lobby.game.scores,
+          roundHistory: lobby.game.roundHistory,
+        };
+      }
+
+      socket.emit('rejoin_success', {
+        screen: 'game',
+        lobbyCode,
+        playerId: socket.id,
+        players: lobby.players,
+        isHost: lobby.hostId === socket.id,
+        chatLog: lobby.chatLog,
+        roundSummary,
+        gameOverData,
+        ...gameState,
+      });
+    } else {
+      socket.emit('rejoin_success', {
+        screen: 'lobby',
+        lobbyCode,
+        playerId: socket.id,
+        players: lobby.players,
+        isHost: lobby.hostId === socket.id,
+        chatLog: lobby.chatLog,
+      });
+    }
   });
 
+  // Explicit leave — always immediate, no grace period
+  socket.on('leave_lobby', () => {
+    cancelDisconnectTimer(socket.id);
+    permanentlyDisconnect(io, socket.id);
+  });
+
+  // Connection lost — start grace period for authenticated users
   socket.on('disconnect', () => {
-    handleDisconnect(io, socket);
+    const info = getPlayerInfo(socket.id);
+    if (!info) return;
+
+    // Authenticated users get a grace period to reconnect
+    if (socket.userId) {
+      console.log(`${info.playerName} disconnected, ${RECONNECT_GRACE_PERIOD / 1000}s grace period started`);
+
+      const timer = setTimeout(() => {
+        disconnectTimers.delete(socket.id);
+        permanentlyDisconnect(io, socket.id);
+      }, RECONNECT_GRACE_PERIOD);
+
+      disconnectTimers.set(socket.id, {
+        timer,
+        lobbyCode: info.lobbyCode,
+        userId: socket.userId,
+        playerName: info.playerName,
+      });
+
+      // Notify others
+      const msg = addChatMessage(info.lobbyCode, null, `${info.playerName} lost connection...`);
+      io.to(info.lobbyCode).emit('chat_message', msg);
+      io.to(info.lobbyCode).emit('player_disconnected', { playerId: socket.id });
+      return;
+    }
+
+    // Guests/unauthenticated — disconnect immediately
+    permanentlyDisconnect(io, socket.id);
   });
 }
 
@@ -479,8 +602,16 @@ function executeBotTurn(io, lobbyCode, botId) {
   }
 }
 
-function handleDisconnect(io, socket) {
-  const result = leaveLobby(socket.id);
+function cancelDisconnectTimer(socketId) {
+  const timerInfo = disconnectTimers.get(socketId);
+  if (timerInfo) {
+    clearTimeout(timerInfo.timer);
+    disconnectTimers.delete(socketId);
+  }
+}
+
+function permanentlyDisconnect(io, socketId) {
+  const result = leaveLobby(socketId);
   if (!result || result.disbanded) return;
 
   const lobby = getLobby(result.lobbyCode);
@@ -501,7 +632,7 @@ function handleDisconnect(io, socket) {
   }
 
   io.to(result.lobbyCode).emit('player_left', {
-    playerId: socket.id,
+    playerId: socketId,
     playerName: result.playerName,
     newHostId: result.newHostId,
     players: lobby ? lobby.players : [],
