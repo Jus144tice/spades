@@ -236,7 +236,6 @@ export function updateGameSettings(lobbyCode, settings) {
     s.bagThreshold = Math.max(5, Math.min(15, Math.round(settings.bagThreshold)));
   }
   if (typeof settings.blindNil === 'boolean') s.blindNil = settings.blindNil;
-  if (typeof settings.doubleNil === 'boolean') s.doubleNil = settings.doubleNil;
   if (typeof settings.moonshot === 'boolean') s.moonshot = settings.moonshot;
   if (typeof settings.tenBidBonus === 'boolean') s.tenBidBonus = settings.tenBidBonus;
 

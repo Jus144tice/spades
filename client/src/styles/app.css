@@ -393,7 +393,7 @@ body {
   font-weight: 600;
 }
 
-.breakdown-line .bags {
+.breakdown-line .books {
   color: var(--gold);
   font-weight: 600;
 }
@@ -449,7 +449,7 @@ body {
   color: var(--accent);
 }
 
-.summary-bags-count {
+.summary-books-count {
   font-size: 11px;
   color: var(--text-secondary);
   margin-left: auto;
@@ -794,6 +794,11 @@ body {
 .settings-btn:hover {
   color: var(--text-primary);
   background: #2e4459;
+}
+
+/* Shift fixed buttons left when desktop chat sidebar is open */
+.chat-shifted {
+  right: 336px;
 }
 
 /* Settings modal */

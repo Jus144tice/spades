@@ -18,7 +18,7 @@ const sections = [
     content: (
       <>
         <p>Before playing, each player looks at their hand and <strong>bids</strong> how many tricks they think they can win (1-13). Your team's bids are combined.</p>
-        <p>Bid what you think you can take. Overbidding risks getting <em>set</em> (losing points). Underbidding earns extra tricks called <em>bags</em> — but too many bags is bad.</p>
+        <p>Bid what you think you can take. Overbidding risks getting <em>set</em> (losing points). Underbidding earns extra tricks called <em>books</em> — but too many books is bad.</p>
         <ul>
           <li><strong>Nil bid</strong> — Bid 0 if you think you can avoid winning any tricks. Worth +100 if you pull it off, -100 if you take even one trick.</li>
           <li>Your partner still bids and plays normally when you go nil.</li>
@@ -57,12 +57,12 @@ const sections = [
               <td>-10 points per trick bid</td>
             </tr>
             <tr>
-              <td><strong>Bags</strong> (overtricks)</td>
+              <td><strong>Books</strong> (overtricks)</td>
               <td>+1 point each, but...</td>
             </tr>
             <tr>
-              <td><strong>10 bags penalty</strong></td>
-              <td>-100 points when you hit 10 bags</td>
+              <td><strong>10 books penalty</strong></td>
+              <td>-100 points when you hit 10 books</td>
             </tr>
             <tr>
               <td><strong>Nil made</strong></td>
@@ -74,18 +74,18 @@ const sections = [
             </tr>
           </tbody>
         </table>
-        <p>Example: Your team bids 5, takes 7 tricks. You get 50 + 2 = <strong>52 points</strong>, and 2 bags added to your count.</p>
+        <p>Example: Your team bids 5, takes 7 tricks. You get 50 + 2 = <strong>52 points</strong>, and 2 books added to your count.</p>
       </>
     ),
   },
   {
-    id: 'bags',
-    title: 'Bags (Overtricks)',
+    id: 'books',
+    title: 'Books (Overtricks)',
     content: (
       <>
-        <p>Bags are the extra tricks you take beyond your bid. They're worth 1 point each, but they accumulate across rounds.</p>
-        <p>When your team hits <strong>10 bags</strong>, you lose <strong>100 points</strong> and your bag count resets. This makes sandbagging (intentionally underbidding) risky.</p>
-        <p>The bag counter is shown on the scoreboard so you can keep track.</p>
+        <p>Books are the extra tricks you take beyond your bid. They're worth 1 point each, but they accumulate across rounds.</p>
+        <p>When your team hits <strong>10 books</strong>, you lose <strong>100 points</strong> and your book count resets. This makes sandbagging (intentionally underbidding) risky.</p>
+        <p>The book counter is shown on the scoreboard so you can keep track.</p>
       </>
     ),
   },
@@ -106,7 +106,7 @@ const sections = [
       <>
         <ul>
           <li><strong>Count your sure tricks</strong> — Aces and Kings of suits are reliable. Bid conservatively at first.</li>
-          <li><strong>Watch the bags</strong> — If your team is at 7-8 bags, try to take exactly your bid.</li>
+          <li><strong>Watch the books</strong> — If your team is at 7-8 books, try to take exactly your bid.</li>
           <li><strong>Protect your partner's nil</strong> — If your partner bid nil, lead high cards to "eat" tricks before they're forced to win one.</li>
           <li><strong>Pay attention to what's been played</strong> — If all the high spades are gone, your mid-spade is now a winner.</li>
           <li><strong>Lead your short suits early</strong> — Run out of a suit so you can trump with spades later.</li>

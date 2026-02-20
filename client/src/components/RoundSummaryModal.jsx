@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
-
-const NIL_BONUS = 100;
-const TEN_TRICK_BONUS = 50;
-const BOOK_PENALTY_THRESHOLD = 10;
-const BOOK_PENALTY = 100;
-const AFK_TURN_TIMEOUT = 60;
-const AFK_FAST_TIMEOUT = 5;
+import {
+  NIL_BONUS, BLIND_NIL_BONUS, TEN_TRICK_BONUS,
+  BOOK_PENALTY, BOOK_PENALTY_THRESHOLD,
+  AFK_TURN_TIMEOUT, AFK_FAST_TIMEOUT,
+} from '../constants.js';
 
 export default function RoundSummaryModal() {
   const { state, dispatch } = useGame();
@@ -57,7 +55,7 @@ export default function RoundSummaryModal() {
           teamClass="team1"
           score={summary.team1Score}
           total={summary.team1Total}
-          bags={summary.team1Books}
+          books={summary.team1Books}
         />
 
         <div className="summary-divider" />
@@ -68,7 +66,7 @@ export default function RoundSummaryModal() {
           teamClass="team2"
           score={summary.team2Score}
           total={summary.team2Total}
-          bags={summary.team2Books}
+          books={summary.team2Books}
         />
 
         <button className="btn btn-primary" onClick={handleContinue}>
@@ -79,7 +77,7 @@ export default function RoundSummaryModal() {
   );
 }
 
-function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
+function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
   const madeOrMissed = analysis.madeBid;
   const scorePositive = score > 0;
 
@@ -98,14 +96,14 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
           <div key={p.id} className="summary-player-row">
             <span className="summary-player-name">{p.name}</span>
             <span className="summary-player-bid">
-              Bid {p.isNil ? 'Nil' : p.bid}
+              Bid {p.isNil ? (p.isBlindNil ? 'Blind Nil' : 'Nil') : p.bid}
             </span>
             <span className="summary-player-tricks">
               Took {p.tricks}
             </span>
             {p.isNil && (
               <span className={`summary-nil-badge ${p.nilSuccess ? 'nil-success' : 'nil-failed'}`}>
-                {p.nilSuccess ? 'Nil Made!' : 'Nil Busted!'}
+                {p.isBlindNil ? (p.nilSuccess ? 'Blind Nil Made!' : 'Blind Nil Busted!') : (p.nilSuccess ? 'Nil Made!' : 'Nil Busted!')}
               </span>
             )}
           </div>
@@ -124,7 +122,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
         )}
         {analysis.nilPoints.map((np, i) => (
           <div key={i} className="breakdown-line">
-            <span>{np.name} Nil</span>
+            <span>{np.name} {np.isBlindNil ? 'Blind Nil' : 'Nil'}</span>
             <span className={np.points > 0 ? 'positive' : 'negative'}>
               {np.points > 0 ? '+' : ''}{np.points}
             </span>
@@ -133,7 +131,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
         {analysis.overtricks > 0 && (
           <div className="breakdown-line">
             <span>Books (+{analysis.overtricks})</span>
-            <span className="bags">+{analysis.overtricks}</span>
+            <span className="books">+{analysis.overtricks}</span>
           </div>
         )}
         {analysis.tenTrickBonus && (
@@ -160,7 +158,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
       <div className="summary-total-row">
         <span className="summary-total-label">Total Score</span>
         <span className="summary-total-value">{total}</span>
-        <span className="summary-bags-count">{bags} books</span>
+        <span className="summary-books-count">{books} books</span>
       </div>
     </div>
   );
@@ -168,12 +166,14 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, bags }) {
 
 function analyzeTeam(teamPlayers, summary, teamKey) {
   const names = teamPlayers.map(p => p.name).join(' & ');
+  const blindNilSet = new Set(summary.blindNilPlayers || []);
   const players = teamPlayers.map(p => ({
     id: p.id,
     name: p.name,
     bid: summary.bids[p.id],
     tricks: summary.tricksTaken[p.id] || 0,
     isNil: summary.bids[p.id] === 0,
+    isBlindNil: blindNilSet.has(p.id),
     nilSuccess: summary.bids[p.id] === 0 && (summary.tricksTaken[p.id] || 0) === 0,
   }));
 
@@ -199,23 +199,27 @@ function analyzeTeam(teamPlayers, summary, teamKey) {
     bidPoints = madeBid ? combinedBid * 10 : -(combinedBid * 10);
   }
 
-  // Overtricks (bags)
+  // Overtricks (books)
   const overtricks = madeBid && combinedBid > 0 ? effectiveTricks - combinedBid : 0;
 
   // Nil points
-  const nilPoints = nilPlayers.map(p => ({
-    name: p.name,
-    points: p.nilSuccess ? NIL_BONUS : -NIL_BONUS,
-  }));
+  const nilPoints = nilPlayers.map(p => {
+    const bonus = p.isBlindNil ? BLIND_NIL_BONUS : NIL_BONUS;
+    return {
+      name: p.name,
+      isBlindNil: p.isBlindNil,
+      points: p.nilSuccess ? bonus : -bonus,
+    };
+  });
 
   // 10+ trick bonus
   const totalTeamTricks = players.reduce((s, p) => s + p.tricks, 0);
   const tenTrickBonus = totalTeamTricks >= 10 && combinedBid > 0 && madeBid;
 
-  // Bag penalty
-  // We check the bags AFTER adding overtricks. The summary already has post-penalty bags.
-  // We can infer penalty if score has a -100 component. Simpler: check current bags from summary.
-  const prevBags = summary[`${teamKey}Books`];
+  // Book penalty
+  // We check the books AFTER adding overtricks. The summary already has post-penalty books.
+  // We can infer penalty if score has a -100 component. Simpler: check current books from summary.
+  const prevBooks = summary[`${teamKey}Books`];
   // Note: bagPenalty is already factored into the round score. We figure out if it happened.
   const bagPenalty = computeBagPenalty(summary, teamKey, overtricks);
 
@@ -235,13 +239,13 @@ function analyzeTeam(teamPlayers, summary, teamKey) {
 
 function computeBagPenalty(summary, teamKey, overtricks) {
   // The round score should equal: bidPoints + nilPoints + overtricks + tenTrickBonus - bagPenalty
-  // We can back-calculate if there was a bag penalty by checking if the reported score
+  // We can back-calculate if there was a book penalty by checking if the reported score
   // is less than expected. But it's simpler to just check: the score in the summary
-  // already includes the penalty. We'll just show it if the bags wrapped around.
-  // Since bags shown are post-penalty, if bags < overtricks and overtricks > 0, penalty happened.
-  const currentBags = summary[`${teamKey}Books`];
-  if (overtricks > 0 && currentBags < overtricks) {
-    // Bags wrapped around - penalty was applied
+  // already includes the penalty. We'll just show it if the books wrapped around.
+  // Since books shown are post-penalty, if books < overtricks and overtricks > 0, penalty happened.
+  const currentBooks = summary[`${teamKey}Books`];
+  if (overtricks > 0 && currentBooks < overtricks) {
+    // Books wrapped around - penalty was applied
     return BOOK_PENALTY;
   }
   return 0;

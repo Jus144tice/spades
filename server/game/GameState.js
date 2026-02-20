@@ -96,16 +96,6 @@ export class GameState {
       }
     }
 
-    // Double nil validation
-    if (bid === 0 && !this.settings.doubleNil) {
-      const playerIndex = this.players.findIndex(p => p.id === playerId);
-      const partnerIndex = (playerIndex + 2) % 4;
-      const partnerId = this.players[partnerIndex].id;
-      if (this.bids[partnerId] === 0) {
-        return { error: 'Double nil is not allowed in this game' };
-      }
-    }
-
     this.bids[playerId] = bid;
     if (options.blindNil) {
       this.blindNilPlayers.add(playerId);
@@ -216,6 +206,7 @@ export class GameState {
             team1Books: this.books.team1,
             team2Books: this.books.team2,
             moonshot: teamKey,
+            blindNilPlayers: [...this.blindNilPlayers],
           };
           this.roundHistory.push(roundSummary);
           return {
@@ -258,6 +249,7 @@ export class GameState {
       team2Total: this.scores.team2,
       team1Books: this.books.team1,
       team2Books: this.books.team2,
+      blindNilPlayers: [...this.blindNilPlayers],
     };
     this.roundHistory.push(roundSummary);
 
@@ -308,6 +300,7 @@ export class GameState {
       roundHistory: this.roundHistory,
       players: this.players.map(p => ({ id: p.id, name: p.name, team: p.team, seatIndex: p.seatIndex, isBot: p.isBot || false })),
       gameSettings: this.settings,
+      blindNilPlayers: [...this.blindNilPlayers],
     };
   }
 }

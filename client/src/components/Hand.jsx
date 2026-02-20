@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import Card from './Card.jsx';
+import Card, { CardBack } from './Card.jsx';
 
-export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken, queuedCard, onQueueCard, canQueue }) {
+export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken, queuedCard, onQueueCard, canQueue, showBacks }) {
   const [touchedIndex, setTouchedIndex] = useState(null);
 
   const isLegalPlay = (card) => {
@@ -42,6 +42,22 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
     }
   };
 
+  if (showBacks) {
+    return (
+      <div className="hand">
+        {cards.map((card, i) => (
+          <div
+            key={`${card.suit}${card.rank}`}
+            className="hand-card"
+            style={{ '--i': i, '--total': cards.length }}
+          >
+            <CardBack />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="hand">
       {cards.map((card, i) => {
@@ -61,7 +77,7 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
             <Card
               card={card}
               onClick={queueable ? onQueueCard : onPlayCard}
-              disabled={!playable && !queueable}
+              disabled={(isMyTurn || canQueue) ? (!playable && !queueable) : false}
             />
           </div>
         );

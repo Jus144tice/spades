@@ -33,6 +33,7 @@ export default function GameScreen() {
 
   const isMyTurn = !isSpectator && state.currentTurnId === state.playerId;
   const canQueue = !isSpectator && state.phase === 'playing' && !isMyTurn && state.currentTrick.length >= 1 && !state.trickWonPending;
+  const showBacks = !isSpectator && state.gameSettings?.blindNil && !state.cardsRevealed && state.phase === 'bidding';
 
   const handlePlayCard = (card) => {
     if (!isMyTurn || state.phase !== 'playing') return;
@@ -82,6 +83,7 @@ export default function GameScreen() {
             isLastTrickWinner={state.lastTrickWinner === partner?.id}
             turnTimer={state.turnTimer}
             isAfk={!!state.afkPlayers[partner?.id]}
+            isBlindNil={state.blindNilPlayers?.includes(partner?.id)}
           />
         </div>
 
@@ -96,6 +98,7 @@ export default function GameScreen() {
             isLastTrickWinner={state.lastTrickWinner === leftOpp?.id}
             turnTimer={state.turnTimer}
             isAfk={!!state.afkPlayers[leftOpp?.id]}
+            isBlindNil={state.blindNilPlayers?.includes(leftOpp?.id)}
           />
         </div>
 
@@ -118,6 +121,7 @@ export default function GameScreen() {
             isLastTrickWinner={state.lastTrickWinner === rightOpp?.id}
             turnTimer={state.turnTimer}
             isAfk={!!state.afkPlayers[rightOpp?.id]}
+            isBlindNil={state.blindNilPlayers?.includes(rightOpp?.id)}
           />
         </div>
 
@@ -133,6 +137,7 @@ export default function GameScreen() {
               isLastTrickWinner={state.lastTrickWinner === getRelativePlayer(0)?.id}
               turnTimer={state.turnTimer}
               isAfk={!!state.afkPlayers[getRelativePlayer(0)?.id]}
+              isBlindNil={state.blindNilPlayers?.includes(getRelativePlayer(0)?.id)}
             />
           ) : (
             <PlayerSeat
@@ -145,6 +150,7 @@ export default function GameScreen() {
               isLastTrickWinner={state.lastTrickWinner === me?.id}
               turnTimer={state.turnTimer}
               isAfk={!!state.afkPlayers[me?.id]}
+              isBlindNil={state.blindNilPlayers?.includes(me?.id)}
             />
           )}
         </div>
@@ -176,6 +182,7 @@ export default function GameScreen() {
           queuedCard={queuedCard}
           onQueueCard={handleQueueCard}
           canQueue={canQueue}
+          showBacks={showBacks}
         />
       )}
 

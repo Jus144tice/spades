@@ -36,6 +36,8 @@ const initialState = {
   gameSettings: null,
   turnTimer: null,
   afkPlayers: {},
+  blindNilPlayers: [],
+  cardsRevealed: false,
 };
 
 function gameReducer(state, action) {
@@ -129,16 +131,23 @@ function gameReducer(state, action) {
         gameSettings: action.data.gameSettings || state.gameSettings,
         turnTimer: null,
         afkPlayers: {},
+        blindNilPlayers: action.data.blindNilPlayers || [],
+        cardsRevealed: false,
       };
 
-    case 'BID_PLACED':
+    case 'BID_PLACED': {
+      const newBlindNil = action.data.blindNil
+        ? [...state.blindNilPlayers, action.data.playerId]
+        : state.blindNilPlayers;
       return {
         ...state,
         bids: { ...state.bids, [action.data.playerId]: action.data.bid },
         currentTurnId: action.data.nextTurnId,
         phase: action.data.allBidsIn ? 'playing' : 'bidding',
+        blindNilPlayers: newBlindNil,
         turnTimer: null,
       };
+    }
 
     case 'CARD_PLAYED': {
       const newHand = action.data.playerId === state.playerId
@@ -203,6 +212,8 @@ function gameReducer(state, action) {
         roundSummary: null,
         lastTrickWinner: null,
         turnTimer: null,
+        blindNilPlayers: [],
+        cardsRevealed: false,
       };
 
     case 'GAME_OVER':
@@ -229,6 +240,8 @@ function gameReducer(state, action) {
         isSpectator: false,
         turnTimer: null,
         afkPlayers: {},
+        blindNilPlayers: [],
+        cardsRevealed: false,
       };
 
     case 'ERROR':
@@ -239,6 +252,9 @@ function gameReducer(state, action) {
 
     case 'CLEAR_ROUND_SUMMARY':
       return { ...state, roundSummary: null };
+
+    case 'REVEAL_CARDS':
+      return { ...state, cardsRevealed: true };
 
     case 'GAME_SETTINGS_UPDATED':
       return { ...state, gameSettings: action.data };
@@ -300,6 +316,8 @@ function gameReducer(state, action) {
           trickWonPending: false,
           isSpectator: d.isSpectator || false,
           gameSettings: d.gameSettings || state.gameSettings,
+          blindNilPlayers: d.blindNilPlayers || [],
+          cardsRevealed: true,
           reconnecting: false,
         };
       }

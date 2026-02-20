@@ -30,7 +30,6 @@ export const DEFAULT_GAME_SETTINGS = {
   winTarget: 500,
   bagThreshold: 10,
   blindNil: false,
-  doubleNil: false,
-  moonshot: false,
-  tenBidBonus: false,
+  moonshot: true,
+  tenBidBonus: true,
 };

@@ -112,7 +112,7 @@ function AppContent() {
             </div>
           )}
           <button
-            className="chat-toggle-btn"
+            className={`chat-toggle-btn ${chatOpen && !isMobile ? 'chat-shifted' : ''}`}
             onClick={() => setChatOpen(prev => !prev)}
             aria-label="Toggle chat"
           >
@@ -124,7 +124,7 @@ function AppContent() {
         </>
       )}
       <button
-        className="settings-btn"
+        className={`settings-btn ${chatOpen && !isMobile ? 'chat-shifted' : ''}`}
         onClick={() => setSettingsOpen(true)}
         aria-label="Settings"
         title="Settings"

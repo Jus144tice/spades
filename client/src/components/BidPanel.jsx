@@ -4,40 +4,60 @@ import { useGame } from '../context/GameContext.jsx';
 
 export default function BidPanel() {
   const socket = useSocket();
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const [selectedBid, setSelectedBid] = useState(null);
-  const [isBlindNil, setIsBlindNil] = useState(false);
 
   const settings = state.gameSettings || {};
-
-  // Find partner's bid to check double nil restriction
-  const myIndex = state.players.findIndex(p => p.id === state.playerId);
-  const partnerIndex = (myIndex + 2) % 4;
-  const partnerId = state.players[partnerIndex]?.id;
-  const partnerBid = state.bids[partnerId];
-  const partnerBidNil = partnerBid === 0;
-  const nilDisabled = !settings.doubleNil && partnerBidNil;
+  const cardsHidden = settings.blindNil && !state.cardsRevealed;
 
   const handleSubmit = () => {
     if (selectedBid === null) return;
-    socket.emit('place_bid', { bid: selectedBid, blindNil: isBlindNil });
-  };
-
-  const handleSelectBid = (bid) => {
-    if (bid === 0 && nilDisabled) return;
-    setSelectedBid(bid);
-    setIsBlindNil(false);
+    socket.emit('place_bid', { bid: selectedBid, blindNil: false });
   };
 
   const handleBlindNil = () => {
-    if (nilDisabled) return;
-    setSelectedBid(0);
-    setIsBlindNil(true);
+    socket.emit('place_bid', { bid: 0, blindNil: true });
+  };
+
+  const handleRevealCards = () => {
+    dispatch({ type: 'REVEAL_CARDS' });
   };
 
   const totalBidSoFar = Object.values(state.bids).reduce((sum, b) => sum + b, 0);
   const bidsPlaced = Object.keys(state.bids).length;
   const remaining = 13 - totalBidSoFar;
+
+  // When cards are hidden, show blind nil choice instead of full bid grid
+  if (cardsHidden) {
+    return (
+      <div className="bid-panel">
+        <div className="blind-nil-choice">
+          <p className="blind-nil-prompt">Your cards are face-down. Bid blind nil or reveal your hand.</p>
+          {bidsPlaced > 0 && (
+            <div className="bid-summary">
+              <span className="bid-summary-item">Total bid: <strong>{totalBidSoFar}</strong></span>
+              <span className="bid-summary-divider">|</span>
+              <span className={`bid-summary-item ${remaining < 0 ? 'overbid' : ''}`}>
+                Remaining: <strong>{remaining}</strong>
+              </span>
+            </div>
+          )}
+          <div className="blind-nil-buttons">
+            <button
+              className="btn btn-primary blind-nil-btn"
+              onClick={handleBlindNil}
+              title="Bid nil without seeing your cards (+/-200)"
+            >
+              Blind Nil
+            </button>
+            <button className="btn btn-secondary" onClick={handleRevealCards}>
+              Show Cards
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bid-panel">
@@ -55,24 +75,12 @@ export default function BidPanel() {
         {Array.from({ length: 14 }, (_, i) => (
           <button
             key={i}
-            className={`bid-btn ${selectedBid === i && !isBlindNil ? 'selected' : ''} ${i === 0 ? 'nil-btn' : ''} ${i === 0 && nilDisabled ? 'disabled' : ''}`}
-            onClick={() => handleSelectBid(i)}
-            disabled={i === 0 && nilDisabled}
-            title={i === 0 && nilDisabled ? 'Partner already bid nil' : ''}
+            className={`bid-btn ${selectedBid === i ? 'selected' : ''} ${i === 0 ? 'nil-btn' : ''}`}
+            onClick={() => setSelectedBid(i)}
           >
             {i === 0 ? 'Nil' : i}
           </button>
         ))}
-        {settings.blindNil && (
-          <button
-            className={`bid-btn blind-nil-btn ${isBlindNil ? 'selected' : ''} ${nilDisabled ? 'disabled' : ''}`}
-            onClick={handleBlindNil}
-            disabled={nilDisabled}
-            title={nilDisabled ? 'Partner already bid nil' : 'Bid nil without seeing your cards (+/-200)'}
-          >
-            Blind Nil
-          </button>
-        )}
       </div>
       <button
         className="btn btn-primary"

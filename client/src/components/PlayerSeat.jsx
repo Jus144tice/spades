@@ -22,7 +22,7 @@ function TurnCountdown({ endsAt }) {
   );
 }
 
-export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner, turnTimer, isAfk }) {
+export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner, turnTimer, isAfk, isBlindNil }) {
   if (!player) return null;
 
   const trickCount = tricks || 0;
@@ -54,7 +54,7 @@ export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDeale
         <div className="player-bid-tricks">
           <div className={`bid-display ${isNil ? 'nil-bid' : ''}`}>
             <span className="bid-tricks-label">Bid</span>
-            <span className="bid-tricks-value">{isNil ? 'Nil' : bid}</span>
+            <span className="bid-tricks-value">{isNil ? (isBlindNil ? 'B.Nil' : 'Nil') : bid}</span>
           </div>
           <div className={`tricks-display ${overUnder !== null && overUnder >= 0 ? 'on-track' : ''} ${overUnder !== null && overUnder < 0 ? 'behind' : ''} ${isNil && trickCount > 0 ? 'nil-broken' : ''}`}>
             <span className="bid-tricks-label">Tricks</span>

@@ -31,9 +31,8 @@ export default function GameSettingsPanel() {
   const hasCustomSettings = settings.winTarget !== 500
     || settings.bagThreshold !== 10
     || settings.blindNil
-    || settings.doubleNil
-    || settings.moonshot
-    || settings.tenBidBonus;
+    || !settings.moonshot
+    || !settings.tenBidBonus;
 
   return (
     <div className="game-settings-panel">
@@ -62,7 +61,7 @@ export default function GameSettingsPanel() {
             </div>
 
             <div className="settings-row">
-              <span className="settings-label">Bags for Penalty</span>
+              <span className="settings-label">Books for Penalty</span>
               {isHost ? (
                 <div className="settings-number">
                   <button className="settings-step" onClick={() => stepNumber('bagThreshold', -1, 5, 15)}>-</button>
@@ -93,25 +92,6 @@ export default function GameSettingsPanel() {
               ) : (
                 <span className={`settings-badge ${settings.blindNil ? 'on' : 'off'}`}>
                   {settings.blindNil ? 'On' : 'Off'}
-                </span>
-              )}
-            </div>
-
-            <div className="settings-row">
-              <div className="settings-label-group">
-                <span className="settings-label">Double Nil</span>
-                <span className="settings-desc">Both partners can bid nil</span>
-              </div>
-              {isHost ? (
-                <button
-                  className={`settings-toggle ${settings.doubleNil ? 'on' : ''}`}
-                  onClick={() => toggleSetting('doubleNil')}
-                >
-                  <span className="toggle-knob"></span>
-                </button>
-              ) : (
-                <span className={`settings-badge ${settings.doubleNil ? 'on' : 'off'}`}>
-                  {settings.doubleNil ? 'On' : 'Off'}
                 </span>
               )}
             </div>
