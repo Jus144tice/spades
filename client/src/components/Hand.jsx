@@ -58,18 +58,21 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
     );
   }
 
-  const isBidding = phase === 'bidding';
+  // During non-playing phases (bidding, scoring), show all cards at full brightness
+  const isPlaying = phase === 'playing';
 
   return (
     <div className="hand">
       {cards.map((card, i) => {
-        const playable = canPlayCard(card);
-        const queueable = canQueueCard(card);
-        const queued = isQueued(card);
+        const playable = isPlaying && canPlayCard(card);
+        const queueable = isPlaying && canQueueCard(card);
+        const queued = isPlaying && isQueued(card);
+        const viewing = !isPlaying;
+        const cardDisabled = isPlaying && (isMyTurn || canQueue) && !playable && !queueable;
         return (
           <div
             key={`${card.suit}${card.rank}`}
-            className={`hand-card ${playable ? 'playable' : ''} ${queueable ? 'queueable' : ''} ${queued ? 'queued' : ''} ${isBidding ? 'viewing' : ''} ${touchedIndex === i ? 'touched' : ''}`}
+            className={`hand-card ${playable ? 'playable' : ''} ${queueable ? 'queueable' : ''} ${queued ? 'queued' : ''} ${viewing ? 'viewing' : ''} ${touchedIndex === i ? 'touched' : ''}`}
             style={{ '--i': i, '--total': cards.length }}
             onTouchEnd={(e) => {
               e.preventDefault();
@@ -79,7 +82,7 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
             <Card
               card={card}
               onClick={queueable ? onQueueCard : onPlayCard}
-              disabled={(isMyTurn || canQueue) ? (!playable && !queueable) : false}
+              disabled={cardDisabled}
             />
           </div>
         );

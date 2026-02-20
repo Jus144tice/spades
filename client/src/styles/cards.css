@@ -190,6 +190,13 @@
   cursor: not-allowed;
 }
 
+/* Cards shown during bidding/scoring — full brightness, no interaction */
+.hand-card.viewing .card {
+  opacity: 1;
+  filter: none;
+  cursor: default;
+}
+
 /* Queueable cards — clickable but not your turn yet */
 .hand-card.queueable .card {
   cursor: pointer;
@@ -256,6 +263,12 @@
   .hand-card:not(.playable):not(.queueable):not(.queued):not(.viewing) .card {
     opacity: 1;
     filter: brightness(0.45) saturate(0.3);
+  }
+
+  /* Viewing cards (bidding/scoring) — override any dimming */
+  .hand-card.viewing .card {
+    opacity: 1;
+    filter: none;
   }
 
   /* Queueable cards on mobile */
