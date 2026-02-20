@@ -10,7 +10,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import pool, { initDB } from './db/index.js';
 import { registerHandlers } from './socketHandlers.js';
-import { validatePreferences, mergeWithDefaults, hasCompletedSetup, PRESETS, TABLE_COLORS } from './game/preferences.js';
+import { validatePreferences, mergeWithDefaults, hasCompletedSetup, PRESETS, TABLE_COLORS, DEFAULTS } from './game/preferences.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
