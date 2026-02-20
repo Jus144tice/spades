@@ -185,7 +185,7 @@
   z-index: 10;
 }
 
-.hand-card:not(.playable):not(.queueable):not(.queued) .card {
+.hand:not(.bidding) .hand-card:not(.playable):not(.queueable):not(.queued) .card {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -253,7 +253,7 @@
   }
 
   /* Disabled cards: use filter instead of opacity to prevent bleed-through */
-  .hand-card:not(.playable):not(.queueable):not(.queued) .card {
+  .hand:not(.bidding) .hand-card:not(.playable):not(.queueable):not(.queued) .card {
     opacity: 1;
     filter: brightness(0.45) saturate(0.3);
   }

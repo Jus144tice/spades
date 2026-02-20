@@ -183,6 +183,7 @@ export default function GameScreen() {
           onQueueCard={handleQueueCard}
           canQueue={canQueue}
           showBacks={showBacks}
+          phase={state.phase}
         />
       )}
 

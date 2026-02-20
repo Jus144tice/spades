@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Card, { CardBack } from './Card.jsx';
 
-export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken, queuedCard, onQueueCard, canQueue, showBacks }) {
+export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken, queuedCard, onQueueCard, canQueue, showBacks, phase }) {
   const [touchedIndex, setTouchedIndex] = useState(null);
 
   const isLegalPlay = (card) => {
@@ -59,7 +59,7 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
   }
 
   return (
-    <div className="hand">
+    <div className={`hand ${phase === 'bidding' ? 'bidding' : ''}`}>
       {cards.map((card, i) => {
         const playable = canPlayCard(card);
         const queueable = canQueueCard(card);
