@@ -197,6 +197,11 @@
   cursor: default;
 }
 
+.hand-card.viewing .card-playable:hover {
+  transform: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.15);
+}
+
 /* Queueable cards — clickable but not your turn yet */
 .hand-card.queueable .card {
   cursor: pointer;
