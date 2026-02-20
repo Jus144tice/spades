@@ -12,12 +12,13 @@ export default function RoundSummaryModal() {
   const socket = useSocket();
   const summary = state.roundSummary;
 
+  const isSinglePlayer = state.players.filter(p => !p.isBot).length <= 1;
   const isAfk = state.afkPlayers[state.playerId];
   const timerDuration = isAfk ? AFK_FAST_TIMEOUT : AFK_TURN_TIMEOUT;
-  const [countdown, setCountdown] = useState(timerDuration);
+  const [countdown, setCountdown] = useState(isSinglePlayer ? 0 : timerDuration);
 
   useEffect(() => {
-    if (!summary) return;
+    if (!summary || isSinglePlayer) return;
     setCountdown(timerDuration);
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -29,7 +30,7 @@ export default function RoundSummaryModal() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [summary, timerDuration]);
+  }, [summary, timerDuration, isSinglePlayer]);
 
   if (!summary) return null;
 

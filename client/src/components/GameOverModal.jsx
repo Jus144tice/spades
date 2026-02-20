@@ -9,10 +9,11 @@ export default function GameOverModal() {
   const { state, dispatch } = useGame();
   const data = state.gameOverData;
 
-  const [countdown, setCountdown] = useState(GAME_OVER_TIMEOUT);
+  const isSinglePlayer = state.players.filter(p => !p.isBot).length <= 1;
+  const [countdown, setCountdown] = useState(isSinglePlayer ? 0 : GAME_OVER_TIMEOUT);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || isSinglePlayer) return;
     setCountdown(GAME_OVER_TIMEOUT);
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -24,7 +25,7 @@ export default function GameOverModal() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [data]);
+  }, [data, isSinglePlayer]);
 
   if (!data) return null;
 
