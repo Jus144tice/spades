@@ -58,8 +58,10 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
     );
   }
 
+  const isBidding = phase === 'bidding';
+
   return (
-    <div className={`hand ${phase === 'bidding' ? 'bidding' : ''}`}>
+    <div className="hand">
       {cards.map((card, i) => {
         const playable = canPlayCard(card);
         const queueable = canQueueCard(card);
@@ -67,7 +69,7 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
         return (
           <div
             key={`${card.suit}${card.rank}`}
-            className={`hand-card ${playable ? 'playable' : ''} ${queueable ? 'queueable' : ''} ${queued ? 'queued' : ''} ${touchedIndex === i ? 'touched' : ''}`}
+            className={`hand-card ${playable ? 'playable' : ''} ${queueable ? 'queueable' : ''} ${queued ? 'queued' : ''} ${isBidding ? 'viewing' : ''} ${touchedIndex === i ? 'touched' : ''}`}
             style={{ '--i': i, '--total': cards.length }}
             onTouchEnd={(e) => {
               e.preventDefault();
