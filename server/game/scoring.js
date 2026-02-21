@@ -20,7 +20,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
     };
   }
 
-  const bagThreshold = settings.bagThreshold || BOOK_PENALTY_THRESHOLD;
+  const bookThreshold = settings.bookThreshold || BOOK_PENALTY_THRESHOLD;
 
   // Build spoiler lookup from mode config
   const spoilerTeams = new Set();
@@ -88,10 +88,10 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
     }
 
     // Book penalty — NOT doubled for spoiler
-    if (books >= bagThreshold) {
-      const penaltyCount = Math.floor(books / bagThreshold);
+    if (books >= bookThreshold) {
+      const penaltyCount = Math.floor(books / bookThreshold);
       roundScore -= penaltyCount * BOOK_PENALTY;
-      books = books % bagThreshold;
+      books = books % bookThreshold;
     }
 
     result[teamKey] = {

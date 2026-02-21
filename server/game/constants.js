@@ -40,7 +40,7 @@ export const AFK_THRESHOLD = 3;         // consecutive timeouts before switching
 
 export const DEFAULT_GAME_SETTINGS = {
   winTarget: 500,
-  bagThreshold: 10,
+  bookThreshold: 10,
   blindNil: false,
   moonshot: true,
   tenBidBonus: true,

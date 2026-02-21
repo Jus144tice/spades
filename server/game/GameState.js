@@ -214,17 +214,9 @@ export class GameState {
             roundNumber: this.roundNumber,
             bids: { ...this.bids },
             tricksTaken: { ...this.tricksTaken },
-            // Dynamic N-team fields
             teamScores,
             teamTotals,
             teamBooks,
-            // Backward-compat flat fields (for 4-player clients)
-            team1Score: teamScores.team1 ?? 0,
-            team2Score: teamScores.team2 ?? 0,
-            team1Total: this.scores.team1 ?? 0,
-            team2Total: this.scores.team2 ?? 0,
-            team1Books: this.books.team1 ?? 0,
-            team2Books: this.books.team2 ?? 0,
             moonshot: teamKey,
             blindNilPlayers: [...this.blindNilPlayers],
           };
@@ -276,17 +268,9 @@ export class GameState {
       roundNumber: this.roundNumber,
       bids: { ...this.bids },
       tricksTaken: { ...this.tricksTaken },
-      // Dynamic N-team fields
       teamScores,
       teamTotals,
       teamBooks,
-      // Backward-compat flat fields
-      team1Score: teamScores.team1 ?? 0,
-      team2Score: teamScores.team2 ?? 0,
-      team1Total: this.scores.team1 ?? 0,
-      team2Total: this.scores.team2 ?? 0,
-      team1Books: this.books.team1 ?? 0,
-      team2Books: this.books.team2 ?? 0,
       blindNilPlayers: [...this.blindNilPlayers],
     };
     this.roundHistory.push(roundSummary);

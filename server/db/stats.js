@@ -31,7 +31,7 @@ export async function updatePlayerStats(client, game, winningTeam) {
     let nilsMade = 0;
     let blindNilAttempts = 0;
     let blindNilsMade = 0;
-    let totalBags = 0;
+    let totalBooks = 0;
     let moonshotWins = 0;
 
     for (const round of game.roundHistory) {
@@ -97,9 +97,9 @@ export async function updatePlayerStats(client, game, winningTeam) {
             timesSet++;
           }
 
-          // Bags (overtricks when bid is made)
+          // Books (overtricks when bid is made)
           if (combinedBid > 0 && effectiveTricks >= combinedBid) {
-            totalBags += effectiveTricks - combinedBid;
+            totalBooks += effectiveTricks - combinedBid;
           }
         }
       }
@@ -169,7 +169,7 @@ export async function updatePlayerStats(client, game, winningTeam) {
       nilsMade,              // $11
       blindNilAttempts,      // $12
       blindNilsMade,         // $13
-      totalBags,             // $14
+      totalBooks,             // $14
       moonshotWins,          // $15
       highestScore,          // $16
     ]);
@@ -220,7 +220,7 @@ export async function getLeaderboard(pool, sortBy = 'games_won') {
     nilsMade: s.nils_made,
     blindNilAttempts: s.blind_nil_attempts,
     blindNilsMade: s.blind_nils_made,
-    totalBags: s.total_bags,
+    totalBooks: s.total_bags,
     moonshotWins: s.moonshot_wins,
     highestGameScore: s.highest_game_score,
   }));
@@ -240,7 +240,7 @@ export async function getPlayerStats(pool, userId) {
       totalTricksTaken: 0, avgBid: '0',
       nilAttempts: 0, nilsMade: 0,
       blindNilAttempts: 0, blindNilsMade: 0,
-      totalBags: 0, moonshotWins: 0, highestGameScore: 0,
+      totalBooks: 0, moonshotWins: 0, highestGameScore: 0,
     };
   }
 
@@ -261,7 +261,7 @@ export async function getPlayerStats(pool, userId) {
     nilsMade: s.nils_made,
     blindNilAttempts: s.blind_nil_attempts,
     blindNilsMade: s.blind_nils_made,
-    totalBags: s.total_bags,
+    totalBooks: s.total_bags,
     moonshotWins: s.moonshot_wins,
     highestGameScore: s.highest_game_score,
   };

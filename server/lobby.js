@@ -339,8 +339,8 @@ export function updateGameSettings(lobbyCode, settings) {
   if (typeof settings.winTarget === 'number') {
     s.winTarget = Math.max(100, Math.min(1000, Math.round(settings.winTarget)));
   }
-  if (typeof settings.bagThreshold === 'number') {
-    s.bagThreshold = Math.max(5, Math.min(15, Math.round(settings.bagThreshold)));
+  if (typeof settings.bookThreshold === 'number') {
+    s.bookThreshold = Math.max(5, Math.min(15, Math.round(settings.bookThreshold)));
   }
   if (typeof settings.blindNil === 'boolean') s.blindNil = settings.blindNil;
   if (typeof settings.moonshot === 'boolean') s.moonshot = settings.moonshot;

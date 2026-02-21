@@ -40,9 +40,9 @@ export default function RoundSummaryModal() {
   const teamAnalyses = teamNums.map(teamNum => {
     const teamKey = 'team' + teamNum;
     const teamPlayers = state.players.filter(p => p.team === teamNum);
-    const score = summary.teamScores?.[teamKey] ?? summary[`team${teamNum}Score`] ?? 0;
-    const total = summary.teamTotals?.[teamKey] ?? summary[`team${teamNum}Total`] ?? 0;
-    const books = summary.teamBooks?.[teamKey] ?? summary[`team${teamNum}Books`] ?? 0;
+    const score = summary.teamScores?.[teamKey] ?? 0;
+    const total = summary.teamTotals?.[teamKey] ?? 0;
+    const books = summary.teamBooks?.[teamKey] ?? 0;
     const spoiler = isSpoilerTeam(state.mode, teamNum);
     return {
       teamNum,
@@ -152,10 +152,10 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, books, spoi
               <span className="positive">+{analysis.tenTrickBonusValue}</span>
             </div>
           )}
-          {analysis.bagPenalty > 0 && (
+          {analysis.bookPenalty > 0 && (
             <div className="breakdown-line penalty-line">
               <span>Book Penalty (10 books)</span>
-              <span className="negative">-{analysis.bagPenalty}</span>
+              <span className="negative">-{analysis.bookPenalty}</span>
             </div>
           )}
           <div className="breakdown-total">
@@ -234,8 +234,8 @@ function analyzeTeam(teamPlayers, summary, teamKey, spoiler = false) {
   const tenTrickBonusValue = tenTrickBonus ? TEN_TRICK_BONUS * multiplier : 0;
 
   // Book penalty — NOT doubled
-  const currentBooks = summary.teamBooks?.[teamKey] ?? summary[`${teamKey}Books`] ?? 0;
-  const bagPenalty = overtricks > 0 && currentBooks < overtricks ? BOOK_PENALTY : 0;
+  const currentBooks = summary.teamBooks?.[teamKey] ?? 0;
+  const bookPenalty = overtricks > 0 && currentBooks < overtricks ? BOOK_PENALTY : 0;
 
   return {
     names,
@@ -248,6 +248,6 @@ function analyzeTeam(teamPlayers, summary, teamKey, spoiler = false) {
     nilPoints,
     tenTrickBonus,
     tenTrickBonusValue,
-    bagPenalty,
+    bookPenalty,
   };
 }

@@ -920,12 +920,14 @@ async function saveGameResults(game, winningTeam) {
     }
 
     for (const round of game.roundHistory) {
-      // Legacy 2-team columns (backward compat)
+      // Legacy 2-team columns (for game_rounds table)
       await client.query(
         `INSERT INTO game_rounds (game_id, round_number, team1_round_score, team2_round_score, team1_total, team2_total, team1_bags, team2_bags)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [gameId, round.roundNumber, round.team1Score, round.team2Score,
-         round.team1Total, round.team2Total, round.team1Books || 0, round.team2Books || 0]
+        [gameId, round.roundNumber,
+         round.teamScores?.team1 ?? 0, round.teamScores?.team2 ?? 0,
+         round.teamTotals?.team1 ?? 0, round.teamTotals?.team2 ?? 0,
+         round.teamBooks?.team1 ?? 0, round.teamBooks?.team2 ?? 0]
       );
 
       // Normalized N-team round scores

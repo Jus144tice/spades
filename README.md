@@ -1,21 +1,30 @@
 # Spades
 
-A multiplayer Spades card game with Google OAuth login, real-time gameplay via Socket.io, and smart bot AI opponents.
+A multiplayer Spades card game with Google OAuth login, real-time gameplay via Socket.io, and smart bot AI opponents. Supports 3-8 players with multiple game modes.
 
 ## Features
 
-- **Real-time multiplayer** via Socket.io (1-4 human players, bots fill remaining seats)
+- **3-8 player modes** with dynamic team configurations:
+  - 3p: 3 solo players
+  - 4p: 2 teams of 2 (classic)
+  - 5p: 2 teams of 2 + 1 spoiler (2x scoring)
+  - 6p: 3 teams of 2
+  - 7p: 3 teams of 2 + 1 spoiler (2x scoring)
+  - 8p: 4 teams of 2, 12 cards per player
+- **Real-time multiplayer** via Socket.io (1-8 human players, bots fill remaining seats)
 - **Google OAuth** login (required to play)
+- **Mega cards** for 5-8 player modes (extended deck with visually distinct mega variants)
 - **Smart bot AI** with:
   - Realistic bidding (ace/king counting, void ruffing, nil detection)
   - Card memory (tracks all played cards, identifies master cards and voids)
   - Dynamic set/duck disposition (adjusts strategy based on books remaining)
   - Partner signaling (reads and sends card signals to coordinate play)
   - Nil protection and nil busting tactics
-  - Trick consolidation (dumps inevitable winners on partner's tricks to minimize bags)
-- **Game stats** tracked in PostgreSQL (wins, losses, round history)
-- **Round summary modal** with score breakdown after each round
-- **Lobby system** with shareable room codes
+  - Trick consolidation (dumps inevitable winners on partner's tricks to minimize books)
+- **Game stats & leaderboard** tracked in PostgreSQL (wins, losses, streaks, round history)
+- **Round summary modal** with detailed score breakdown after each round
+- **Lobby system** with shareable room codes, room browser, and configurable game settings
+- **Reconnection support** with game pause/resume when players disconnect
 
 ## Tech Stack
 
@@ -113,35 +122,54 @@ The app automatically handles dynamic hosts via proxy trust and relative callbac
 
 ```
 spades/
-  client/                  # React frontend (Vite)
+  client/                    # React frontend (Vite)
     src/
-      components/          # Game UI components (Hand, Scoreboard, etc.)
-      context/             # React contexts (GameContext, SocketContext, AuthContext)
-      screens/             # JoinScreen, GameScreen
+      components/            # Game UI components (Hand, Scoreboard, etc.)
+      context/               # React contexts (GameContext, SocketContext, AuthContext)
+      screens/               # JoinScreen, LobbyScreen, GameScreen
+      modes.js               # Client-side mode utilities (layout, descriptions)
   server/
-    index.js               # Express server, Passport auth, session setup
-    socketHandlers.js       # Socket.io game event handlers
-    botAI.js                # Bot AI (bidding, card play, signaling)
+    index.js                 # Express server, Passport auth, session setup
+    socketHandlers.js        # Socket.io game event handlers
+    lobby.js                 # Lobby management, seating, team assignment
+    botAI.js                 # Bot AI (bidding, card play, signaling)
+    afkManager.js            # AFK detection and auto-play
     game/
-      GameState.js          # Core game state machine
-      deck.js               # Deck creation, shuffle, deal
-      tricks.js             # Trick validation and winner determination
-      scoring.js            # Round scoring (bids, bags, nil bonuses)
-      constants.js          # Card rank values
+      GameState.js           # Core game state machine
+      modes.js               # Game mode configs for 3-8 players
+      modeHelpers.js         # Team lookup, score init utilities
+      deck.js                # Deck creation, shuffle, deal (with mega card support)
+      tricks.js              # Trick validation and winner determination
+      scoring.js             # Round scoring (bids, books, nil bonuses)
+      constants.js           # Card rank values and game constants
+      preferences.js         # Player card sort preferences
+    ai/
+      bidding.js             # Bot bidding logic
+      strategy.js            # Set/duck disposition engine
+      memory.js              # Card memory and tracking
+      helpers.js             # Card evaluation utilities
     db/
-      index.js              # PostgreSQL pool and schema init
-      schema.sql            # Database schema
-  .env                      # Environment variables (not committed)
+      index.js               # PostgreSQL pool and schema init
+      schema.sql             # Database schema
+      stats.js               # Player stats and leaderboard queries
+  .env                       # Environment variables (not committed)
 ```
 
 ## Game Rules
 
-Standard partnership Spades:
-- 4 players in 2 teams (seats 0+2 vs 1+3)
+### Classic (4-player)
+
+- 4 players in 2 teams, partners sit across from each other
 - 13 tricks per round, spades are trump
 - Bid 0 = Nil (bonus/penalty of 100 points)
-- Making your bid: bid x 10 points + 1 per overtrick (bag)
+- Making your bid: bid x 10 points + 1 per overtrick (book)
 - Missing your bid: -(bid x 10) points
-- 10 accumulated bags = -100 penalty
+- 10 accumulated books = -100 penalty
 - 10+ tricks in a round with a non-nil bid = +50 bonus
 - First team to 500 wins
+
+### Multi-player Modes
+
+- **5p/7p (Spoiler):** One solo player whose bid/nil scoring is doubled. Partners still sit directly across using a hexagonal (5p) or octagonal (7p) layout.
+- **6p/8p:** Additional teams of 2. 8-player uses 12 cards per player.
+- **Mega cards:** Modes with 5+ players use an extended deck with mega variants of low cards (2 through King, no mega Aces). Mega cards beat the same rank but lose to the next rank up.

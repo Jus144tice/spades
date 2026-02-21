@@ -30,7 +30,7 @@ export default function GameSettingsPanel() {
 
   // Check if any settings differ from defaults
   const hasCustomSettings = settings.winTarget !== 500
-    || settings.bagThreshold !== 10
+    || settings.bookThreshold !== 10
     || settings.blindNil
     || !settings.moonshot
     || !settings.tenBidBonus
@@ -82,12 +82,12 @@ export default function GameSettingsPanel() {
               <span className="settings-label">Books for Penalty</span>
               {isHost ? (
                 <div className="settings-number">
-                  <button className="settings-step" onClick={() => stepNumber('bagThreshold', -1, 5, 15)}>-</button>
-                  <span className="settings-value">{settings.bagThreshold}</span>
-                  <button className="settings-step" onClick={() => stepNumber('bagThreshold', 1, 5, 15)}>+</button>
+                  <button className="settings-step" onClick={() => stepNumber('bookThreshold', -1, 5, 15)}>-</button>
+                  <span className="settings-value">{settings.bookThreshold}</span>
+                  <button className="settings-step" onClick={() => stepNumber('bookThreshold', 1, 5, 15)}>+</button>
                 </div>
               ) : (
-                <span className="settings-value-readonly">{settings.bagThreshold}</span>
+                <span className="settings-value-readonly">{settings.bookThreshold}</span>
               )}
             </div>
           </div>

@@ -60,7 +60,7 @@ export default function GameOverModal() {
           {teams.map(t => (
             <div key={t.teamKey} className="final-score-row">
               <span>{t.names}{t.spoiler ? ' (Spoiler)' : ''}</span>
-              <span className="final-score-value">{data.finalScores?.[t.teamKey] ?? data.finalScores?.[`team${t.teamNum}`] ?? 0}</span>
+              <span className="final-score-value">{data.finalScores?.[t.teamKey] ?? 0}</span>
             </div>
           ))}
         </div>
@@ -82,8 +82,8 @@ export default function GameOverModal() {
                   <tr key={i}>
                     <td>{r.roundNumber}</td>
                     {teams.map(t => {
-                      const score = r.teamScores?.[t.teamKey] ?? r[`team${t.teamNum}Score`] ?? 0;
-                      const total = r.teamTotals?.[t.teamKey] ?? r[`team${t.teamNum}Total`] ?? 0;
+                      const score = r.teamScores?.[t.teamKey] ?? 0;
+                      const total = r.teamTotals?.[t.teamKey] ?? 0;
                       return (
                         <td key={t.teamKey}>
                           {score > 0 ? '+' : ''}{score === 'MOONSHOT' ? 'MOONSHOT' : score} ({total})

@@ -125,8 +125,8 @@ export default function Scoreboard() {
                   <tr key={i}>
                     <td>{r.roundNumber}</td>
                     {teamStats.map(t => {
-                      const score = r.teamScores?.[t.teamKey] ?? r[`${t.teamKey.replace('team', 'team')}Score`] ?? 0;
-                      const total = r.teamTotals?.[t.teamKey] ?? r[`${t.teamKey.replace('team', 'team')}Total`] ?? 0;
+                      const score = r.teamScores?.[t.teamKey] ?? 0;
+                      const total = r.teamTotals?.[t.teamKey] ?? 0;
                       return (
                         <td key={t.teamKey}>
                           {score > 0 ? '+' : ''}{score === 'MOONSHOT' ? 'MOONSHOT' : score} ({total})

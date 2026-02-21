@@ -135,7 +135,7 @@ export default function LeaderboardModal({ onClose }) {
               <StatItem label="Tricks Won" value={myStats.totalTricksTaken} />
               <StatItem label="Nils Made" value={`${myStats.nilsMade}/${myStats.nilAttempts}`} />
               <StatItem label="Blind Nils" value={`${myStats.blindNilsMade}/${myStats.blindNilAttempts}`} />
-              <StatItem label="Total Bags" value={myStats.totalBags} />
+              <StatItem label="Total Books" value={myStats.totalBooks} />
               <StatItem label="Moonshots" value={myStats.moonshotWins} />
               <StatItem label="Best Score" value={myStats.highestGameScore} />
             </div>
