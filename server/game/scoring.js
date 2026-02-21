@@ -21,11 +21,23 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
   }
 
   const bagThreshold = settings.bagThreshold || BOOK_PENALTY_THRESHOLD;
+
+  // Build spoiler lookup from mode config
+  const spoilerTeams = new Set();
+  if (mode && mode.teams) {
+    for (const tc of mode.teams) {
+      if (tc.spoiler) spoilerTeams.add(tc.id);
+    }
+  }
+
   const result = {};
 
   for (const [teamKey, playerIds] of Object.entries(teamsByKey)) {
     let roundScore = 0;
     let books = currentBooks[teamKey] || 0;
+    const isSpoiler = spoilerTeams.has(teamKey);
+    // Spoiler scoring: bids and bonuses are doubled
+    const multiplier = isSpoiler ? 2 : 1;
 
     const nilPlayers = playerIds.filter(id => bids[id] === 0);
     const nonNilPlayers = playerIds.filter(id => bids[id] > 0);
@@ -35,8 +47,10 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
     for (const pid of nilPlayers) {
       const bonus = blindNilPlayers.has(pid) ? BLIND_NIL_BONUS : NIL_BONUS;
       if (tricksTaken[pid] === 0) {
-        roundScore += bonus;
+        // Nil made — spoiler gets double bonus
+        roundScore += bonus * multiplier;
       } else {
+        // Nil failed — spoiler does NOT get double penalty (too easy to set a solo player)
         roundScore -= bonus;
         // Failed nil tricks count toward partner's bid, NOT auto-booked
         failedNilTricks += tricksTaken[pid];
@@ -51,27 +65,29 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
 
     if (combinedBid > 0) {
       if (effectiveTricks >= combinedBid) {
-        roundScore += combinedBid * 10;
+        // Bid made — spoiler gets double bid points, but overtricks are normal
+        roundScore += combinedBid * 10 * multiplier;
         const overtricks = effectiveTricks - combinedBid;
         roundScore += overtricks;
         books += overtricks;
       } else {
-        roundScore -= combinedBid * 10;
+        // Bid missed — spoiler gets double penalty
+        roundScore -= combinedBid * 10 * multiplier;
       }
     } else if (combinedBid === 0 && failedNilTricks > 0) {
       // All players on team bid nil and at least one failed - those tricks are books
       books += failedNilTricks;
     }
 
-    // 10+ trick bonus (only if setting is enabled)
+    // 10+ trick bonus (only if setting is enabled) — spoiler gets double
     if (settings.tenBidBonus) {
       const totalTeamTricks = playerIds.reduce((sum, id) => sum + tricksTaken[id], 0);
       if (totalTeamTricks >= 10 && combinedBid > 0 && effectiveTricks >= combinedBid) {
-        roundScore += TEN_TRICK_BONUS;
+        roundScore += TEN_TRICK_BONUS * multiplier;
       }
     }
 
-    // Book penalty
+    // Book penalty — NOT doubled for spoiler
     if (books >= bagThreshold) {
       const penaltyCount = Math.floor(books / bagThreshold);
       roundScore -= penaltyCount * BOOK_PENALTY;
@@ -82,6 +98,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
       roundScore,
       newTotal: (currentScores[teamKey] || 0) + roundScore,
       books,
+      isSpoiler,
     };
   }
 

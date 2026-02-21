@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext.jsx';
-import { getTricksPerRound } from '../modes.js';
+import { getTricksPerRound, isSpoilerTeam } from '../modes.js';
 
 export default function Scoreboard() {
   const { state } = useGame();
@@ -15,7 +15,8 @@ export default function Scoreboard() {
     const teamKey = 'team' + teamNum;
     const teamPlayers = state.players.filter(p => p.team === teamNum);
     const names = teamPlayers.map(p => p.name).join(' & ');
-    return { teamNum, teamKey, teamPlayers, names };
+    const spoiler = isSpoilerTeam(state.mode, teamNum);
+    return { teamNum, teamKey, teamPlayers, names, spoiler };
   });
 
   const allBidsIn = Object.keys(state.bids).length === playerCount;
@@ -78,7 +79,9 @@ export default function Scoreboard() {
           <div className="score-extra-teams">
             {teamStats.slice(2).map(t => (
               <div key={t.teamKey} className="score-extra-team">
-                <span className="score-extra-name">{t.names}</span>
+                <span className="score-extra-name">
+                  {t.names}{t.spoiler ? ' (2x)' : ''}
+                </span>
                 <span className="score-extra-value">{state.scores[t.teamKey] ?? 0}</span>
               </div>
             ))}

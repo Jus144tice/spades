@@ -163,25 +163,32 @@
 
 /* Mega card indicator */
 .card-mega {
-  border-color: #7c4dff;
-  box-shadow: 0 0 6px rgba(124, 77, 255, 0.4), 0 2px 8px rgba(0,0,0,0.2);
+  border: 2px solid #7c4dff;
+  background: linear-gradient(160deg, #f5f0ff, #ede7f6, #e8eaf6) !important;
+  box-shadow: 0 0 10px rgba(124, 77, 255, 0.5), 0 2px 8px rgba(0,0,0,0.2);
 }
 
-.card-mega-badge {
+.card-mega-banner {
   position: absolute;
-  top: 2px;
-  right: 4px;
-  font-size: 9px;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  color: #fff;
+  font-size: 8px;
   font-weight: 800;
-  color: #7c4dff;
-  line-height: 1;
-  z-index: 1;
+  text-align: center;
+  padding: 1px 0;
+  letter-spacing: 1.5px;
+  border-radius: var(--card-radius) var(--card-radius) 0 0;
+  z-index: 2;
+  text-transform: uppercase;
 }
 
-.card-small .card-mega-badge {
-  font-size: 7px;
-  top: 1px;
-  right: 2px;
+.card-small .card-mega-banner {
+  font-size: 6px;
+  padding: 0.5px 0;
+  letter-spacing: 1px;
 }
 
 /* Hand */

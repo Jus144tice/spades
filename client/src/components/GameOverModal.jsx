@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useGame } from '../context/GameContext.jsx';
+import { isSpoilerTeam } from '../modes.js';
 
 const GAME_OVER_TIMEOUT = 60;
 
@@ -35,7 +36,8 @@ export default function GameOverModal() {
     const teamKey = 'team' + teamNum;
     const teamPlayers = state.players.filter(p => p.team === teamNum);
     const names = teamPlayers.map(p => p.name).join(' & ');
-    return { teamNum, teamKey, names };
+    const spoiler = isSpoilerTeam(state.mode, teamNum);
+    return { teamNum, teamKey, names, spoiler };
   });
 
   const handlePlayAgain = () => {
@@ -57,7 +59,7 @@ export default function GameOverModal() {
         <div className="final-scores">
           {teams.map(t => (
             <div key={t.teamKey} className="final-score-row">
-              <span>{t.names}</span>
+              <span>{t.names}{t.spoiler ? ' (Spoiler)' : ''}</span>
               <span className="final-score-value">{data.finalScores?.[t.teamKey] ?? data.finalScores?.[`team${t.teamNum}`] ?? 0}</span>
             </div>
           ))}

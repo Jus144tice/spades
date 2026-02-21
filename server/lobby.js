@@ -177,6 +177,18 @@ export function assignTeam(lobbyCode, targetPlayerId, team) {
   const player = lobby.players.find(p => p.id === targetPlayerId);
   if (!player) return { error: 'Player not found' };
 
+  // Validate team size limit (skip if unassigning to null/spectator)
+  if (team !== null) {
+    const mode = getMode(lobby.gameSettings.gameMode || 4);
+    const teamConfig = mode.teams.find(t => t.id === `team${team}`);
+    if (teamConfig) {
+      const currentCount = lobby.players.filter(p => p.team === team && p.id !== targetPlayerId).length;
+      if (currentCount >= teamConfig.size) {
+        return { error: `Team ${team} is full` };
+      }
+    }
+  }
+
   player.team = team; // 1, 2, 3, 4, ... or null (spectator)
   return { players: lobby.players };
 }
@@ -239,32 +251,70 @@ export function canStartGame(lobbyCode, requesterId) {
 }
 
 /**
- * Arrange players so teammates sit across from each other.
- * Algorithm: for each "round" (0 to maxTeamSize-1), seat one player from each team.
- * For 4-player this produces [T1a, T2a, T1b, T2b] at seats 0-3 — identical to the classic layout.
+ * Arrange players so partners sit directly across from each other.
+ *
+ * For modes with a spoiler (5p, 7p), the layout uses playerCount+1 positions
+ * (e.g., hexagon for 5p, octagon for 7p). Partners sit at exactly half the
+ * layout distance apart (directly across). The spoiler occupies one of the
+ * remaining positions, and the seat across from them stays empty.
+ *
+ * For even modes (4p, 6p, 8p), layoutSeats == playerCount and all seats are used.
+ *
+ * Examples (layout positions):
+ *   4p (4 seats): [T1a, T2a, T1b, T2b] — partners at offset 2
+ *   5p (6 seats): [T1a, T2a, Spoiler, T1b, T2b, _empty_] — partners at offset 3
+ *   6p (6 seats): [T1a, T2a, T3a, T1b, T2b, T3b] — partners at offset 3
+ *   7p (8 seats): [T1a, T2a, T3a, Spoiler, T1b, T2b, T3b, _empty_] — partners at offset 4
+ *   8p (8 seats): [T1a, T2a, T3a, T4a, T1b, T2b, T3b, T4b] — partners at offset 4
  */
 export function arrangeSeating(players, mode) {
   const modeConfig = mode || getMode(4);
+  const ls = modeConfig.layoutSeats || modeConfig.playerCount;
+  const half = ls / 2;
 
-  // Group players by team number
-  const teamGroups = {};
+  // Separate pair teams (size 2) from solo teams (size 1)
+  const pairTeams = [];
+  const soloTeams = [];
   for (const tc of modeConfig.teams) {
     const teamNum = parseInt(tc.id.replace('team', ''), 10);
-    teamGroups[teamNum] = players.filter(p => p.team === teamNum);
+    const teamPlayers = players.filter(p => p.team === teamNum);
+    if (tc.size === 2) {
+      pairTeams.push(teamPlayers);
+    } else {
+      soloTeams.push(teamPlayers);
+    }
   }
 
-  const seated = [];
-  let seatIndex = 0;
-  const maxTeamSize = Math.max(...modeConfig.teams.map(t => t.size));
+  // Use layoutSeats positions (may be > playerCount for spoiler modes)
+  const layoutPositions = new Array(ls).fill(null);
 
-  for (let round = 0; round < maxTeamSize; round++) {
-    for (const tc of modeConfig.teams) {
-      const teamNum = parseInt(tc.id.replace('team', ''), 10);
-      const teamPlayers = teamGroups[teamNum];
-      if (round < teamPlayers.length) {
-        seated.push({ ...teamPlayers[round], seatIndex });
-        seatIndex++;
+  // Place pair teams: first member at position i, partner at position i + half
+  for (let i = 0; i < pairTeams.length; i++) {
+    const [a, b] = pairTeams[i];
+    layoutPositions[i] = a;
+    layoutPositions[i + half] = b;
+  }
+
+  // Place solo teams in first available empty positions
+  const empties = [];
+  for (let i = 0; i < ls; i++) {
+    if (layoutPositions[i] === null) empties.push(i);
+  }
+  let soloIdx = 0;
+  for (const teamPlayers of soloTeams) {
+    for (const p of teamPlayers) {
+      if (soloIdx < empties.length) {
+        layoutPositions[empties[soloIdx]] = p;
+        soloIdx++;
       }
+    }
+  }
+
+  // Build seated array from occupied positions, preserving layout position as seatIndex
+  const seated = [];
+  for (let i = 0; i < ls; i++) {
+    if (layoutPositions[i] !== null) {
+      seated.push({ ...layoutPositions[i], seatIndex: i });
     }
   }
 
@@ -297,8 +347,13 @@ export function updateGameSettings(lobbyCode, settings) {
   if (typeof settings.tenBidBonus === 'boolean') s.tenBidBonus = settings.tenBidBonus;
   if (typeof settings.gameMode === 'number') {
     const validModes = [3, 4, 5, 6, 7, 8];
-    if (validModes.includes(settings.gameMode)) {
+    if (validModes.includes(settings.gameMode) && settings.gameMode !== s.gameMode) {
       s.gameMode = settings.gameMode;
+      // Reset all team assignments when mode changes (team structure differs per mode)
+      for (const p of lobby.players) {
+        p.team = null;
+      }
+      return { gameSettings: { ...s }, teamsReset: true, players: lobby.players };
     }
   }
 

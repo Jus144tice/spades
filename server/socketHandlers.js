@@ -241,6 +241,9 @@ export function registerHandlers(io, socket) {
         return;
       }
       io.to(info.lobbyCode).emit('game_settings_updated', result.gameSettings);
+      if (result.teamsReset) {
+        io.to(info.lobbyCode).emit('teams_updated', { players: result.players });
+      }
     });
   });
 

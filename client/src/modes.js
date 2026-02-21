@@ -86,3 +86,33 @@ export function getCardsPerPlayer(mode) {
 export function getTricksPerRound(mode) {
   return mode?.tricksPerRound || 13;
 }
+
+/**
+ * Check if a given team number is a spoiler team in the current mode.
+ * The spoiler is a solo player in 5p/7p with double-scoring rules.
+ * @param {object} mode - mode info from server
+ * @param {number} teamNum - team number (1, 2, 3, ...)
+ * @returns {boolean}
+ */
+export function isSpoilerTeam(mode, teamNum) {
+  if (!mode?.teams) return false;
+  const teamConfig = mode.teams.find(t => t.id === 'team' + teamNum);
+  return teamConfig?.spoiler || false;
+}
+
+/**
+ * Get a brief description of the mode for display.
+ * @param {number} gameMode - player count (3-8)
+ * @returns {string}
+ */
+export function getModeDescription(gameMode) {
+  switch (gameMode) {
+    case 3: return '3 solo players';
+    case 4: return '2 teams of 2';
+    case 5: return '2 teams + 1 spoiler';
+    case 6: return '3 teams of 2';
+    case 7: return '3 teams + 1 spoiler';
+    case 8: return '4 teams of 2, 12 cards';
+    default: return '';
+  }
+}

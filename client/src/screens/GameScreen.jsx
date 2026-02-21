@@ -132,21 +132,29 @@ export default function GameScreen() {
   };
 
   // --- N-player layout (polygon) ---
+  // For spoiler modes (5p, 7p), layoutSeats > playerCount so partners sit directly across
+  // and the spoiler's opposite seat is empty.
+  const layoutSeats = state.mode?.layoutSeats || playerCount;
+  const mySeatIndex = me?.seatIndex ?? (isSpectator ? state.players[0]?.seatIndex ?? 0 : 0);
+
   const renderPolygonLayout = () => {
-    // Build array of all other players (offsets 1 to playerCount-1)
-    const otherPlayers = [];
-    for (let offset = 1; offset < playerCount; offset++) {
-      otherPlayers.push({ offset, player: getRelativePlayer(offset) });
-    }
+    // Build list of other players with their relative layout position
+    const otherPlayers = state.players
+      .filter(p => p.id !== state.playerId || isSpectator)
+      .filter(p => isSpectator ? p !== state.players[0] : true)
+      .map(p => ({
+        player: p,
+        layoutOffset: (p.seatIndex - mySeatIndex + layoutSeats) % layoutSeats,
+      }));
 
     return (
       <div className="game-table game-table-polygon">
         {/* Other players around the table */}
-        {otherPlayers.map(({ offset, player }) => {
-          const pos = getSeatPosition(offset, playerCount);
+        {otherPlayers.map(({ player, layoutOffset }) => {
+          const pos = getSeatPosition(layoutOffset, layoutSeats);
           return (
             <div
-              key={offset}
+              key={player.id}
               className="seat seat-polygon"
               style={{ position: 'absolute', left: pos.left, top: pos.top, transform: 'translate(-50%, -50%)' }}
             >
@@ -162,12 +170,14 @@ export default function GameScreen() {
           myIndex={myIndex}
           playerCount={playerCount}
           lastTrickWinner={state.lastTrickWinner}
+          layoutSeats={layoutSeats}
+          mySeatIndex={mySeatIndex}
         />
 
         {/* Bottom seat (me) */}
         <div className="seat seat-bottom-polygon">
           {isSpectator ? (
-            <PlayerSeat {...seatProps(getRelativePlayer(0))} />
+            <PlayerSeat {...seatProps(state.players[0])} />
           ) : (
             <PlayerSeat {...seatProps(me, { isMe: true, isCurrentTurn: isMyTurn, isDealer: myIndex === state.dealerIndex })} />
           )}

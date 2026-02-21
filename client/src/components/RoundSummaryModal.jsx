@@ -6,6 +6,7 @@ import {
   BOOK_PENALTY, BOOK_PENALTY_THRESHOLD,
   AFK_TURN_TIMEOUT, AFK_FAST_TIMEOUT,
 } from '../constants.js';
+import { isSpoilerTeam } from '../modes.js';
 
 export default function RoundSummaryModal() {
   const { state, dispatch } = useGame();
@@ -42,13 +43,15 @@ export default function RoundSummaryModal() {
     const score = summary.teamScores?.[teamKey] ?? summary[`team${teamNum}Score`] ?? 0;
     const total = summary.teamTotals?.[teamKey] ?? summary[`team${teamNum}Total`] ?? 0;
     const books = summary.teamBooks?.[teamKey] ?? summary[`team${teamNum}Books`] ?? 0;
+    const spoiler = isSpoilerTeam(state.mode, teamNum);
     return {
       teamNum,
       teamKey,
-      analysis: analyzeTeam(teamPlayers, summary, teamKey),
+      analysis: analyzeTeam(teamPlayers, summary, teamKey, spoiler),
       score,
       total,
       books,
+      spoiler,
     };
   });
 
@@ -67,11 +70,12 @@ export default function RoundSummaryModal() {
             {i > 0 && <div className="summary-divider" />}
             <TeamSummary
               analysis={t.analysis}
-              teamLabel={`Team ${t.teamNum}`}
+              teamLabel={t.spoiler ? 'Spoiler' : `Team ${t.teamNum}`}
               teamClass={t.teamKey}
               score={t.score}
               total={t.total}
               books={t.books}
+              spoiler={t.spoiler}
             />
           </React.Fragment>
         ))}
@@ -84,7 +88,7 @@ export default function RoundSummaryModal() {
   );
 }
 
-function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
+function TeamSummary({ analysis, teamLabel, teamClass, score, total, books, spoiler }) {
   const madeOrMissed = analysis.madeBid;
   const scorePositive = typeof score === 'number' && score > 0;
 
@@ -122,7 +126,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
         <div className="summary-breakdown">
           {analysis.bidPoints !== 0 && (
             <div className="breakdown-line">
-              <span>Bid ({analysis.combinedBid})</span>
+              <span>Bid ({analysis.combinedBid}){spoiler ? ' \u00D72' : ''}</span>
               <span className={analysis.bidPoints > 0 ? 'positive' : 'negative'}>
                 {analysis.bidPoints > 0 ? '+' : ''}{analysis.bidPoints}
               </span>
@@ -130,7 +134,7 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
           )}
           {analysis.nilPoints.map((np, i) => (
             <div key={i} className="breakdown-line">
-              <span>{np.name} {np.isBlindNil ? 'Blind Nil' : 'Nil'}</span>
+              <span>{np.name} {np.isBlindNil ? 'Blind Nil' : 'Nil'}{np.doubled ? ' \u00D72' : ''}</span>
               <span className={np.points > 0 ? 'positive' : 'negative'}>
                 {np.points > 0 ? '+' : ''}{np.points}
               </span>
@@ -144,8 +148,8 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
           )}
           {analysis.tenTrickBonus && (
             <div className="breakdown-line bonus-line">
-              <span>10+ Trick Bonus</span>
-              <span className="positive">+{TEN_TRICK_BONUS}</span>
+              <span>10+ Trick Bonus{spoiler ? ' \u00D72' : ''}</span>
+              <span className="positive">+{analysis.tenTrickBonusValue}</span>
             </div>
           )}
           {analysis.bagPenalty > 0 && (
@@ -173,9 +177,10 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
   );
 }
 
-function analyzeTeam(teamPlayers, summary, teamKey) {
+function analyzeTeam(teamPlayers, summary, teamKey, spoiler = false) {
   const names = teamPlayers.map(p => p.name).join(' & ');
   const blindNilSet = new Set(summary.blindNilPlayers || []);
+  const multiplier = spoiler ? 2 : 1;
   const players = teamPlayers.map(p => ({
     id: p.id,
     name: p.name,
@@ -202,30 +207,33 @@ function analyzeTeam(teamPlayers, summary, teamKey) {
     ? nilPlayers.every(p => p.nilSuccess)
     : effectiveTricks >= combinedBid;
 
-  // Bid points
+  // Bid points — spoiler gets double
   let bidPoints = 0;
   if (combinedBid > 0) {
-    bidPoints = madeBid ? combinedBid * 10 : -(combinedBid * 10);
+    bidPoints = madeBid ? combinedBid * 10 * multiplier : -(combinedBid * 10 * multiplier);
   }
 
-  // Overtricks (books)
+  // Overtricks (books) — NOT doubled
   const overtricks = madeBid && combinedBid > 0 ? effectiveTricks - combinedBid : 0;
 
-  // Nil points
+  // Nil points — spoiler gets double on make, normal on miss
   const nilPoints = nilPlayers.map(p => {
     const bonus = p.isBlindNil ? BLIND_NIL_BONUS : NIL_BONUS;
+    const doubled = spoiler && p.nilSuccess;
     return {
       name: p.name,
       isBlindNil: p.isBlindNil,
-      points: p.nilSuccess ? bonus : -bonus,
+      points: p.nilSuccess ? bonus * multiplier : -bonus,
+      doubled,
     };
   });
 
-  // 10+ trick bonus
+  // 10+ trick bonus — spoiler gets double
   const totalTeamTricks = players.reduce((s, p) => s + p.tricks, 0);
   const tenTrickBonus = totalTeamTricks >= 10 && combinedBid > 0 && madeBid;
+  const tenTrickBonusValue = tenTrickBonus ? TEN_TRICK_BONUS * multiplier : 0;
 
-  // Book penalty
+  // Book penalty — NOT doubled
   const currentBooks = summary.teamBooks?.[teamKey] ?? summary[`${teamKey}Books`] ?? 0;
   const bagPenalty = overtricks > 0 && currentBooks < overtricks ? BOOK_PENALTY : 0;
 
@@ -239,6 +247,7 @@ function analyzeTeam(teamPlayers, summary, teamKey) {
     overtricks,
     nilPoints,
     tenTrickBonus,
+    tenTrickBonusValue,
     bagPenalty,
   };
 }

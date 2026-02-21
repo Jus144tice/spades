@@ -2,14 +2,20 @@ import React from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useGame } from '../context/GameContext.jsx';
 
-// Team configurations by game mode (player count -> team structure)
+// Team configurations by game mode: team number -> max size
 const TEAM_CONFIGS = {
-  3: [1, 2, 3],
-  4: [1, 2],
-  5: [1, 2, 3],
-  6: [1, 2, 3],
-  7: [1, 2, 3, 4],
-  8: [1, 2, 3, 4],
+  3: { 1: 1, 2: 1, 3: 1 },
+  4: { 1: 2, 2: 2 },
+  5: { 1: 2, 2: 2, 3: 1 },
+  6: { 1: 2, 2: 2, 3: 2 },
+  7: { 1: 2, 2: 2, 3: 2, 4: 1 },
+  8: { 1: 2, 2: 2, 3: 2, 4: 2 },
+};
+
+// Which teams are spoilers per mode (solo player with double-scoring)
+const SPOILER_TEAMS = {
+  5: new Set([3]),
+  7: new Set([4]),
 };
 
 export default function TeamPicker({ onRemoveBot }) {
@@ -17,7 +23,8 @@ export default function TeamPicker({ onRemoveBot }) {
   const { state } = useGame();
 
   const gameMode = state.gameSettings?.gameMode || 4;
-  const teamNums = TEAM_CONFIGS[gameMode] || [1, 2];
+  const teamConfig = TEAM_CONFIGS[gameMode] || { 1: 2, 2: 2 };
+  const teamNums = Object.keys(teamConfig).map(Number);
 
   const handleAssign = (playerId, team) => {
     socket.emit('assign_team', { targetPlayerId: playerId, team });
@@ -26,8 +33,15 @@ export default function TeamPicker({ onRemoveBot }) {
   const unassigned = state.players.filter(p => p.team === null);
   const teamGroups = teamNums.map(num => ({
     num,
+    maxSize: teamConfig[num],
     players: state.players.filter(p => p.team === num),
   }));
+
+  // Track which teams are full
+  const teamFull = {};
+  for (const tg of teamGroups) {
+    teamFull[tg.num] = tg.players.length >= tg.maxSize;
+  }
 
   const assignedCount = state.players.filter(p => p.team !== null).length;
 
@@ -45,7 +59,7 @@ export default function TeamPicker({ onRemoveBot }) {
           {state.isHost && (
             <>
               {teamNums.map(num => (
-                player.team !== num && (
+                player.team !== num && !teamFull[num] && (
                   <button
                     key={num}
                     className={`btn btn-tiny team${num}-btn`}
@@ -77,13 +91,17 @@ export default function TeamPicker({ onRemoveBot }) {
         </div>
       )}
       <div className="teams-row">
-        {teamGroups.map(({ num, players }) => (
-          <div key={num} className={`team-group team${num}`}>
-            <h3>Team {num}</h3>
-            {players.length === 0 && <div className="team-empty">Empty</div>}
-            {players.map(renderPlayer)}
-          </div>
-        ))}
+        {teamGroups.map(({ num, maxSize, players }) => {
+          const isSpoiler = SPOILER_TEAMS[gameMode]?.has(num);
+          return (
+            <div key={num} className={`team-group team${num} ${isSpoiler ? 'spoiler-team' : ''}`}>
+              <h3>{isSpoiler ? 'Spoiler' : `Team ${num}`} <span className="team-count">({players.length}/{maxSize})</span></h3>
+              {isSpoiler && <div className="spoiler-hint">Solo player, 2x scoring</div>}
+              {players.length === 0 && <div className="team-empty">Empty</div>}
+              {players.map(renderPlayer)}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

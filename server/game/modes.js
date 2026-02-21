@@ -7,6 +7,9 @@
 
 import { SUITS, RANKS } from './constants.js';
 
+// Mega cards never include Aces — Aces are high and shouldn't have mega variants.
+const MEGA_RANKS = RANKS.filter(r => r !== 'A');
+
 // --- Deck building helpers ---
 
 /**
@@ -31,13 +34,14 @@ function computeRemovedCards(cardsToRemove) {
 
 /**
  * Compute which mega cards to ADD to the deck.
- * Fills rank-by-rank from 2 upward, all 4 suits per rank, then partial suits in S, H, D, C order.
+ * Fills rank-by-rank from 2 upward (never Aces), all 4 suits per rank,
+ * then partial suits in S, H, D, C order.
  */
 function computeMegaCards(extraCardsNeeded) {
   if (extraCardsNeeded <= 0) return [];
   const mega = [];
   let remaining = extraCardsNeeded;
-  for (const rank of RANKS) {
+  for (const rank of MEGA_RANKS) {
     if (remaining <= 0) break;
     for (const suit of SUITS) {
       if (remaining <= 0) break;
@@ -57,12 +61,12 @@ export const GAME_MODES = {
     tricksPerRound: 13,
     totalCards: 39,
     teams: [
-      { id: 'team1', size: 1, spoiler: true },
-      { id: 'team2', size: 1, spoiler: true },
-      { id: 'team3', size: 1, spoiler: true },
+      { id: 'team1', size: 1, spoiler: false },
+      { id: 'team2', size: 1, spoiler: false },
+      { id: 'team3', size: 1, spoiler: false },
     ],
     teamCount: 3,
-    hasSpoiler: true,
+    hasSpoiler: false,
     seatingPattern: 'polygon',
     // 52 - 39 = 13 cards removed (lowest ranks first)
     removedCards: computeRemovedCards(13),
@@ -96,6 +100,8 @@ export const GAME_MODES = {
     teamCount: 3,
     hasSpoiler: true,
     seatingPattern: 'polygon',
+    // Use 6 layout positions so partners sit directly across; spoiler's opposite seat is empty
+    layoutSeats: 6,
     removedCards: [],
     megaCards: computeMegaCards(13),
   },
@@ -129,14 +135,16 @@ export const GAME_MODES = {
     teamCount: 4,
     hasSpoiler: true,
     seatingPattern: 'polygon',
+    // Use 8 layout positions so partners sit directly across; spoiler's opposite seat is empty
+    layoutSeats: 8,
     removedCards: [],
     megaCards: computeMegaCards(39),
   },
   8: {
     playerCount: 8,
-    cardsPerPlayer: 13,
-    tricksPerRound: 13,
-    totalCards: 104,
+    cardsPerPlayer: 12,
+    tricksPerRound: 12,
+    totalCards: 96,
     teams: [
       { id: 'team1', size: 2, spoiler: false },
       { id: 'team2', size: 2, spoiler: false },
@@ -146,8 +154,9 @@ export const GAME_MODES = {
     teamCount: 4,
     hasSpoiler: false,
     seatingPattern: 'polygon',
+    // 52 regular + 44 mega (2-Q) = 96 = 12 per player. No mega Aces.
     removedCards: [],
-    megaCards: computeMegaCards(52),
+    megaCards: computeMegaCards(44),
   },
 };
 

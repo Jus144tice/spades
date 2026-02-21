@@ -21,7 +21,7 @@ export default function Card({ card, onClick, disabled, small }) {
       <div className="card-center">
         {SUIT_SYMBOLS[card.suit]}
       </div>
-      {isMega && <div className="card-mega-badge">M</div>}
+      {isMega && <div className="card-mega-banner">MEGA</div>}
       <div className="card-corner bottom-right">
         <div className="card-rank">{card.rank}</div>
         <div className="card-suit">{SUIT_SYMBOLS[card.suit]}</div>

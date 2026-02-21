@@ -388,6 +388,7 @@ export class GameState {
         tricksPerRound: this.mode.tricksPerRound,
         hasSpoiler: this.mode.hasSpoiler,
         seatingPattern: this.mode.seatingPattern,
+        layoutSeats: this.mode.layoutSeats || this.mode.playerCount,
         teams: this.mode.teams,
       },
     };

@@ -16,6 +16,8 @@
   --accent-hover: #29b6f6;
   --team1: #66bb6a;
   --team2: #ef5350;
+  --team3: #ffa726;
+  --team4: #ab47bc;
   --gold: #ffd54f;
   --success: #66bb6a;
   --danger: #ef5350;
@@ -142,6 +144,8 @@ body {
 
 .team1-btn { border-color: var(--team1); color: var(--team1); }
 .team2-btn { border-color: var(--team2); color: var(--team2); }
+.team3-btn { border-color: var(--team3); color: var(--team3); }
+.team4-btn { border-color: var(--team4); color: var(--team4); }
 
 /* Error toast */
 .error-toast {

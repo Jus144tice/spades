@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useGame } from '../context/GameContext.jsx';
+import { getModeDescription } from '../modes.js';
 
 export default function GameSettingsPanel() {
   const socket = useSocket();
@@ -49,12 +50,15 @@ export default function GameSettingsPanel() {
         <div className="game-settings-body">
           <div className="settings-section">
             <div className="settings-row">
-              <span className="settings-label">Players</span>
+              <div className="settings-label-group">
+                <span className="settings-label">Players</span>
+                <span className="settings-desc">{getModeDescription(settings.gameMode || 4)}</span>
+              </div>
               {isHost ? (
                 <div className="settings-number">
-                  <button className="settings-step" onClick={() => stepNumber('gameMode', -1, 4, 4)} disabled>-</button>
+                  <button className="settings-step" onClick={() => stepNumber('gameMode', -1, 3, 8)}>-</button>
                   <span className="settings-value">{settings.gameMode || 4}</span>
-                  <button className="settings-step" onClick={() => stepNumber('gameMode', 1, 4, 4)} disabled>+</button>
+                  <button className="settings-step" onClick={() => stepNumber('gameMode', 1, 3, 8)}>+</button>
                 </div>
               ) : (
                 <span className="settings-value-readonly">{settings.gameMode || 4}</span>
