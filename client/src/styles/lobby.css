@@ -514,7 +514,7 @@
 
 /* Room Browser */
 .join-card-wide {
-  max-width: 600px;
+  max-width: 720px;
 }
 
 .room-browser {
@@ -540,15 +540,122 @@
   margin: 4px 0;
 }
 
+/* Filter toolbar */
+.room-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.room-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-filter-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.room-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.room-filter-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.room-filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.room-filter-chip.active {
+  background: rgba(79, 195, 247, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.room-filter-chip.active-off {
+  background: rgba(239, 83, 80, 0.12);
+  border-color: rgba(239, 83, 80, 0.5);
+  color: var(--danger);
+}
+
+.room-sort-select {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.room-sort-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.room-filter-reset {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+
+.room-filter-reset:hover {
+  color: var(--text-primary);
+}
+
+.room-filter-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+/* Room grid */
 .room-grid {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 320px;
+  max-height: 400px;
   overflow-y: auto;
   margin-bottom: 16px;
 }
 
+/* Room card */
 .room-card {
   background: var(--bg-dark);
   border: 1px solid var(--border);
@@ -626,9 +733,37 @@
   font-weight: 500;
 }
 
-.room-card-settings {
-  font-size: 11px;
+/* Settings tags on room cards */
+.room-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.room-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.room-tag.tag-mode {
+  background: rgba(79, 195, 247, 0.15);
+  color: var(--accent);
+}
+
+.room-tag.tag-on {
+  background: rgba(102, 187, 106, 0.15);
+  color: var(--team1);
+}
+
+.room-tag.tag-off {
+  background: rgba(239, 83, 80, 0.1);
+  color: var(--danger);
 }
 
 .room-card-join {
@@ -708,6 +843,38 @@
 
   .lobby-actions {
     flex-direction: column;
+  }
+
+  /* Room browser mobile */
+  .join-card-wide {
+    max-width: 100%;
+  }
+
+  .room-filter-bar {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .room-filter-group {
+    flex-wrap: wrap;
+  }
+
+  .room-filter-chip {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  .room-card {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .room-card-code {
+    font-size: 15px;
+  }
+
+  .room-tag {
+    font-size: 9px;
   }
 
   /* Chat in lobby/game — full width on mobile */

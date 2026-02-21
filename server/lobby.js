@@ -513,6 +513,10 @@ export function getRoomList() {
       } : null,
       settings: {
         winTarget: lobby.gameSettings.winTarget,
+        bookThreshold: lobby.gameSettings.bookThreshold,
+        blindNil: lobby.gameSettings.blindNil,
+        moonshot: lobby.gameSettings.moonshot,
+        tenBidBonus: lobby.gameSettings.tenBidBonus,
       },
     });
   }
