@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:server": "node --watch server/index.js",
-    "dev:client": "cd client && npx vite",
+    "dev:server": "node --watch --max-http-header-size=65536 server/index.js",
+    "dev:client": "cd client && node --max-http-header-size=65536 node_modules/vite/bin/vite.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "cd client && npx vite build",
-    "start": "node server/index.js"
+    "start": "node --max-http-header-size=65536 server/index.js"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",

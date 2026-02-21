@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS users (
   preferences JSONB DEFAULT '{}' NOT NULL
 );
 
+-- Add preferences column if missing (for existing databases)
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN preferences JSONB DEFAULT '{}' NOT NULL;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
 -- Games table
 CREATE TABLE IF NOT EXISTS games (
   id SERIAL PRIMARY KEY,
@@ -65,3 +71,34 @@ CREATE TABLE IF NOT EXISTS round_bids (
 );
 CREATE INDEX IF NOT EXISTS idx_round_bids_game ON round_bids(game_id);
 CREATE INDEX IF NOT EXISTS idx_round_bids_user ON round_bids(user_id);
+
+-- One-time migration: clear old game data when player_stats doesn't exist yet
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'player_stats') THEN
+    TRUNCATE games, game_players, game_rounds, round_bids CASCADE;
+    RAISE NOTICE 'Cleared old game data for stats migration';
+  END IF;
+END $$;
+
+-- Player stats (denormalized, updated incrementally at game end)
+CREATE TABLE IF NOT EXISTS player_stats (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  games_played INTEGER DEFAULT 0,
+  games_won INTEGER DEFAULT 0,
+  games_lost INTEGER DEFAULT 0,
+  current_win_streak INTEGER DEFAULT 0,
+  best_win_streak INTEGER DEFAULT 0,
+  total_rounds INTEGER DEFAULT 0,
+  perfect_bids INTEGER DEFAULT 0,
+  times_set INTEGER DEFAULT 0,
+  total_tricks_taken INTEGER DEFAULT 0,
+  total_bid_sum INTEGER DEFAULT 0,
+  nil_attempts INTEGER DEFAULT 0,
+  nils_made INTEGER DEFAULT 0,
+  blind_nil_attempts INTEGER DEFAULT 0,
+  blind_nils_made INTEGER DEFAULT 0,
+  total_bags INTEGER DEFAULT 0,
+  moonshot_wins INTEGER DEFAULT 0,
+  highest_game_score INTEGER DEFAULT 0,
+  last_played_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

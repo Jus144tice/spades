@@ -38,6 +38,9 @@ const initialState = {
   afkPlayers: {},
   blindNilPlayers: [],
   cardsRevealed: false,
+  roomList: [],
+  gamePaused: false,
+  vacantSeats: [],
 };
 
 function gameReducer(state, action) {
@@ -57,7 +60,41 @@ function gameReducer(state, action) {
         gameSettings: action.data.gameSettings || null,
       };
 
-    case 'LOBBY_JOINED':
+    case 'LOBBY_JOINED': {
+      const chatMessages = (action.data.chatLog || []).map(m => ({
+        sender: m.sender,
+        message: m.message,
+        timestamp: m.timestamp,
+      }));
+      if (action.data.gameInProgress && action.data.gameState) {
+        // Joining mid-game as spectator
+        return {
+          ...state,
+          screen: 'game',
+          playerId: action.data.playerId,
+          lobbyCode: action.data.lobbyCode,
+          players: action.data.players,
+          isHost: action.data.isHost,
+          chatMessages,
+          reconnecting: false,
+          gameSettings: action.data.gameSettings || null,
+          phase: action.data.gameState.phase,
+          hand: action.data.gameState.hand || [],
+          bids: action.data.gameState.bids || {},
+          currentTrick: action.data.gameState.currentTrick || [],
+          tricksTaken: action.data.gameState.tricksTaken || {},
+          scores: action.data.gameState.scores || { team1: 0, team2: 0 },
+          books: action.data.gameState.books || { team1: 0, team2: 0 },
+          currentTurnId: action.data.gameState.currentTurnId,
+          dealerIndex: action.data.gameState.dealerIndex,
+          spadesBroken: action.data.gameState.spadesBroken,
+          roundNumber: action.data.gameState.roundNumber,
+          roundHistory: action.data.gameState.roundHistory || [],
+          isSpectator: true,
+          gamePaused: action.data.paused || false,
+          vacantSeats: action.data.vacantSeats || [],
+        };
+      }
       return {
         ...state,
         screen: 'lobby',
@@ -65,14 +102,11 @@ function gameReducer(state, action) {
         lobbyCode: action.data.lobbyCode,
         players: action.data.players,
         isHost: action.data.isHost,
-        chatMessages: (action.data.chatLog || []).map(m => ({
-          sender: m.sender,
-          message: m.message,
-          timestamp: m.timestamp,
-        })),
+        chatMessages,
         reconnecting: false,
         gameSettings: action.data.gameSettings || null,
       };
+    }
 
     case 'PLAYER_JOINED':
       return {
@@ -242,6 +276,8 @@ function gameReducer(state, action) {
         afkPlayers: {},
         blindNilPlayers: [],
         cardsRevealed: false,
+        gamePaused: false,
+        vacantSeats: [],
       };
 
     case 'ERROR':
@@ -274,6 +310,44 @@ function gameReducer(state, action) {
       }
       return { ...state, afkPlayers: newAfk };
     }
+
+    case 'ROOM_LIST':
+      return { ...state, roomList: action.data };
+
+    case 'GAME_PAUSED':
+      return { ...state, gamePaused: true, vacantSeats: action.data.vacantSeats };
+
+    case 'GAME_RESUMED':
+      return { ...state, gamePaused: false, vacantSeats: [] };
+
+    case 'SEAT_FILLED':
+      return {
+        ...state,
+        players: action.data.players,
+        vacantSeats: action.data.vacantSeats,
+      };
+
+    case 'GAME_STATE_SYNC':
+      return {
+        ...state,
+        phase: action.data.phase,
+        hand: action.data.hand,
+        bids: action.data.bids,
+        currentTrick: action.data.currentTrick,
+        tricksTaken: action.data.tricksTaken,
+        scores: action.data.scores,
+        books: action.data.books,
+        currentTurnId: action.data.currentTurnId,
+        dealerIndex: action.data.dealerIndex,
+        spadesBroken: action.data.spadesBroken,
+        roundNumber: action.data.roundNumber,
+        roundHistory: action.data.roundHistory,
+        players: action.data.players,
+        isSpectator: action.data.isSpectator || false,
+        gameSettings: action.data.gameSettings || state.gameSettings,
+        gamePaused: false,
+        vacantSeats: [],
+      };
 
     case 'LEAVE':
       return { ...initialState };
@@ -319,6 +393,8 @@ function gameReducer(state, action) {
           blindNilPlayers: d.blindNilPlayers || [],
           cardsRevealed: true,
           reconnecting: false,
+          gamePaused: d.gamePaused || false,
+          vacantSeats: d.vacantSeats || [],
         };
       }
       // Lobby rejoin
@@ -382,6 +458,11 @@ export function GameProvider({ children }) {
       error_msg: (data) => dispatch({ type: 'ERROR', data }),
       rejoin_success: (data) => dispatch({ type: 'REJOIN_SUCCESS', data }),
       rejoin_failed: () => dispatch({ type: 'REJOIN_FAILED' }),
+      room_list: (data) => dispatch({ type: 'ROOM_LIST', data }),
+      game_paused: (data) => dispatch({ type: 'GAME_PAUSED', data }),
+      game_resumed: () => dispatch({ type: 'GAME_RESUMED' }),
+      seat_filled: (data) => dispatch({ type: 'SEAT_FILLED', data }),
+      game_state_sync: (data) => dispatch({ type: 'GAME_STATE_SYNC', data }),
     };
 
     for (const [event, handler] of Object.entries(handlers)) {

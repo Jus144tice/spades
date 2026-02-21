@@ -2,10 +2,12 @@ import {
   createLobby, joinLobby, leaveLobby, getLobby, getPlayerInfo,
   addChatMessage, assignTeam, autoAssignTeams, canStartGame,
   arrangeSeating, addBot, removeBot, updatePlayerSocket, updateGameSettings,
+  getRoomList, fillSeat, fillSeatWithBot,
 } from './lobby.js';
 import { GameState } from './game/GameState.js';
 import { botBid, botPlayCard, evaluateBlindNil } from './botAI.js';
 import pool from './db/index.js';
+import { updatePlayerStats } from './db/stats.js';
 import { mergeWithDefaults } from './game/preferences.js';
 import { AFK_TURN_TIMEOUT, AFK_THRESHOLD } from './game/constants.js';
 import {
@@ -24,6 +26,18 @@ const disconnectTimers = new Map();
 
 function botDelay() {
   return BOT_DELAY_MIN + Math.random() * (BOT_DELAY_MAX - BOT_DELAY_MIN);
+}
+
+// Throttled room list broadcast (max once per second)
+let roomListTimer = null;
+let roomListIO = null;
+function broadcastRoomListUpdate(io) {
+  roomListIO = io;
+  if (roomListTimer) return;
+  roomListTimer = setTimeout(() => {
+    roomListTimer = null;
+    if (roomListIO) roomListIO.to('room_browser').emit('room_list', getRoomList());
+  }, 1000);
 }
 
 function isSinglePlayerGame(lobbyCode) {
@@ -85,6 +99,7 @@ function getBidContext(game, playerId) {
 
 export function registerHandlers(io, socket) {
   socket.on('create_lobby', ({ playerName }) => {
+    socket.leave('room_browser');
     const lobby = createLobby(socket.id, playerName, socket.userId);
     socket.join(lobby.code);
     socket.emit('lobby_created', {
@@ -94,9 +109,11 @@ export function registerHandlers(io, socket) {
       isHost: true,
       gameSettings: lobby.gameSettings,
     });
+    broadcastRoomListUpdate(io);
   });
 
   socket.on('join_lobby', ({ playerName, lobbyCode }) => {
+    socket.leave('room_browser');
     const result = joinLobby(socket.id, playerName, lobbyCode, socket.userId);
     if (result.error) {
       socket.emit('error_msg', { message: result.error });
@@ -104,14 +121,32 @@ export function registerHandlers(io, socket) {
     }
 
     socket.join(result.lobby.code);
-    socket.emit('lobby_joined', {
-      lobbyCode: result.lobby.code,
-      playerId: socket.id,
-      players: result.lobby.players,
-      chatLog: result.lobby.chatLog,
-      isHost: false,
-      gameSettings: result.lobby.gameSettings,
-    });
+
+    if (result.joinedAsSpectator && result.lobby.game) {
+      // Joining mid-game as spectator — send game state too
+      const gameState = result.lobby.game.getStateForPlayer(socket.id);
+      socket.emit('lobby_joined', {
+        lobbyCode: result.lobby.code,
+        playerId: socket.id,
+        players: result.lobby.players,
+        chatLog: result.lobby.chatLog,
+        isHost: false,
+        gameSettings: result.lobby.gameSettings,
+        gameInProgress: true,
+        gameState: { ...gameState, isSpectator: true },
+        paused: result.lobby.paused,
+        vacantSeats: result.lobby.vacantSeats,
+      });
+    } else {
+      socket.emit('lobby_joined', {
+        lobbyCode: result.lobby.code,
+        playerId: socket.id,
+        players: result.lobby.players,
+        chatLog: result.lobby.chatLog,
+        isHost: false,
+        gameSettings: result.lobby.gameSettings,
+      });
+    }
 
     socket.to(result.lobby.code).emit('player_joined', {
       player: result.player,
@@ -120,6 +155,7 @@ export function registerHandlers(io, socket) {
 
     const msg = addChatMessage(result.lobby.code, null, `${playerName} joined the room`);
     io.to(result.lobby.code).emit('chat_message', msg);
+    broadcastRoomListUpdate(io);
   });
 
   socket.on('add_bot', () => {
@@ -249,6 +285,7 @@ export function registerHandlers(io, socket) {
 
     broadcastGameState(io, lobby, 'game_started');
     scheduleBotTurn(io, info.lobbyCode);
+    broadcastRoomListUpdate(io);
   });
 
   socket.on('place_bid', ({ bid, blindNil }) => {
@@ -353,6 +390,30 @@ export function registerHandlers(io, socket) {
     io.to(lobbyCode).emit('chat_message', msg);
     io.to(lobbyCode).emit('player_reconnected', { playerId: socket.id });
 
+    // If game is paused and this player has a vacant seat, auto-fill it
+    if (lobby.game && lobby.paused) {
+      const vacantIndex = lobby.vacantSeats.findIndex(
+        v => v.previousPlayerName === player.name
+      );
+      if (vacantIndex !== -1) {
+        const vacant = lobby.vacantSeats[vacantIndex];
+        const seatResult = fillSeat(lobbyCode, socket.id, vacant.seatIndex);
+        if (!seatResult.error) {
+          io.to(lobbyCode).emit('seat_filled', {
+            seatIndex: vacant.seatIndex,
+            player: { id: socket.id, name: player.name, team: vacant.team },
+            players: lobby.players,
+            vacantSeats: lobby.vacantSeats,
+          });
+          if (seatResult.resumed) {
+            io.to(lobbyCode).emit('game_resumed');
+            const rMsg = addChatMessage(lobbyCode, null, 'All seats filled — game resumed!');
+            io.to(lobbyCode).emit('chat_message', rMsg);
+          }
+        }
+      }
+    }
+
     // Send current state
     if (lobby.game) {
       const isGamePlayer = lobby.game.players.some(p => p.id === socket.id);
@@ -378,8 +439,16 @@ export function registerHandlers(io, socket) {
         players: lobby.players, isHost: lobby.hostId === socket.id,
         chatLog: lobby.chatLog, roundSummary, gameOverData,
         isSpectator: !isGamePlayer, gameSettings: lobby.gameSettings,
+        gamePaused: lobby.paused,
+        vacantSeats: lobby.vacantSeats,
         ...gameState,
       });
+
+      // If game just resumed via auto-fill, sync state + schedule bot turns
+      if (lobby.game && !lobby.paused && isGamePlayer) {
+        broadcastGameState(io, lobby, 'game_state_sync');
+        scheduleBotTurn(io, lobbyCode);
+      }
     } else {
       socket.emit('rejoin_success', {
         screen: 'lobby', lobbyCode, playerId: socket.id,
@@ -387,6 +456,86 @@ export function registerHandlers(io, socket) {
         chatLog: lobby.chatLog, gameSettings: lobby.gameSettings,
       });
     }
+    broadcastRoomListUpdate(io);
+  });
+
+  // --- Room browser ---
+  socket.on('request_room_list', () => {
+    socket.join('room_browser');
+    socket.emit('room_list', getRoomList());
+  });
+
+  socket.on('leave_room_browser', () => {
+    socket.leave('room_browser');
+  });
+
+  // --- Fill vacant seat ---
+  socket.on('fill_seat', ({ seatIndex }) => {
+    const info = getPlayerInfo(socket.id);
+    if (!info) return;
+
+    const result = fillSeat(info.lobbyCode, socket.id, seatIndex);
+    if (result.error) {
+      socket.emit('error_msg', { message: result.error });
+      return;
+    }
+
+    const lobby = getLobby(info.lobbyCode);
+
+    io.to(info.lobbyCode).emit('seat_filled', {
+      seatIndex,
+      player: { id: socket.id, name: result.player.name, team: result.vacant.team },
+      players: lobby.players,
+      vacantSeats: lobby.vacantSeats,
+    });
+
+    const msg = addChatMessage(info.lobbyCode, null, `${result.player.name} took the vacant seat!`);
+    io.to(info.lobbyCode).emit('chat_message', msg);
+
+    if (result.resumed) {
+      lobby.paused = false;
+      io.to(info.lobbyCode).emit('game_resumed');
+      broadcastGameState(io, lobby, 'game_state_sync');
+      scheduleBotTurn(io, info.lobbyCode);
+      const rMsg = addChatMessage(info.lobbyCode, null, 'All seats filled — game resumed!');
+      io.to(info.lobbyCode).emit('chat_message', rMsg);
+    }
+
+    broadcastRoomListUpdate(io);
+  });
+
+  socket.on('fill_seat_with_bot', ({ seatIndex }) => {
+    requireHost(socket, 'replace with a bot', (info) => {
+      const lobby = getLobby(info.lobbyCode);
+      if (!lobby) return;
+
+      const result = fillSeatWithBot(info.lobbyCode, seatIndex);
+      if (result.error) {
+        socket.emit('error_msg', { message: result.error });
+        return;
+      }
+
+      io.to(info.lobbyCode).emit('seat_filled', {
+        seatIndex,
+        player: result.botPlayer,
+        players: lobby.players,
+        vacantSeats: lobby.vacantSeats,
+      });
+
+      const msg = addChatMessage(info.lobbyCode, null, `${result.botPlayer.name} (Bot) replaced the vacant seat`);
+      io.to(info.lobbyCode).emit('chat_message', msg);
+
+      if (result.resumed) {
+        lobby.paused = false;
+        io.to(info.lobbyCode).emit('game_resumed');
+        broadcastGameState(io, lobby, 'game_state_sync');
+        scheduleBotTurn(io, info.lobbyCode);
+        const rMsg = addChatMessage(info.lobbyCode, null, 'All seats filled — game resumed!');
+        io.to(info.lobbyCode).emit('chat_message', rMsg);
+      }
+
+      broadcastRoomListUpdate(io);
+    });
   });
 
   socket.on('leave_lobby', () => {
@@ -425,8 +574,11 @@ export function registerHandlers(io, socket) {
 
 function returnToLobby(io, lobbyCode, lobby) {
   lobby.game = null;
+  lobby.paused = false;
+  lobby.vacantSeats = [];
   for (const p of lobby.players) p.team = null;
   io.to(lobbyCode).emit('returned_to_lobby', { players: lobby.players });
+  broadcastRoomListUpdate(io);
 }
 
 function checkAllReady(io, lobbyCode, lobby) {
@@ -524,6 +676,7 @@ function handleRoundOver(io, lobbyCode, lobby, result) {
 function startHumanTurnTimer(io, lobbyCode) {
   const lobby = getLobby(lobbyCode);
   if (!lobby || !lobby.game) return;
+  if (lobby.paused) return;
   if (lobby.game.phase === 'gameOver' || lobby.game.phase === 'scoring') return;
 
   const currentPlayerId = lobby.game.getCurrentTurnPlayerId();
@@ -629,6 +782,7 @@ function startGameOverTimer(io, lobbyCode) {
 function scheduleBotTurn(io, lobbyCode) {
   const lobby = getLobby(lobbyCode);
   if (!lobby || !lobby.game) return;
+  if (lobby.paused) return;
   if (lobby.game.phase === 'gameOver' || lobby.game.phase === 'scoring') return;
 
   const currentPlayerId = lobby.game.getCurrentTurnPlayerId();
@@ -689,25 +843,25 @@ function cancelDisconnectTimer(socketId) {
 }
 
 function permanentlyDisconnect(io, socketId) {
-  let wasGamePlayer = false;
-  const preCheckInfo = getPlayerInfo(socketId);
-  if (preCheckInfo) {
-    const preCheckLobby = getLobby(preCheckInfo.lobbyCode);
-    if (preCheckLobby && preCheckLobby.game) {
-      wasGamePlayer = preCheckLobby.game.players.some(p => p.id === socketId);
-    }
-  }
-
   const result = leaveLobby(socketId);
-  if (!result || result.disbanded) return;
+  if (!result) return;
+  if (result.disbanded) {
+    broadcastRoomListUpdate(io);
+    return;
+  }
 
   const lobby = getLobby(result.lobbyCode);
 
-  if (lobby && lobby.game && wasGamePlayer && lobby.game.phase !== 'gameOver') {
-    cleanupAfkState(result.lobbyCode);
-    returnToLobby(io, result.lobbyCode, lobby);
+  if (result.gamePaused && lobby) {
+    // Game paused, not cancelled
+    clearTurnTimer(result.lobbyCode);
 
-    const msg = addChatMessage(result.lobbyCode, null, `${result.playerName} left. Game has been cancelled.`);
+    io.to(result.lobbyCode).emit('game_paused', {
+      reason: `${result.playerName} left the game`,
+      vacantSeats: lobby.vacantSeats,
+    });
+
+    const msg = addChatMessage(result.lobbyCode, null, `${result.playerName} left. Game paused — waiting for replacement.`);
     io.to(result.lobbyCode).emit('chat_message', msg);
   }
 
@@ -716,8 +870,12 @@ function permanentlyDisconnect(io, socketId) {
     newHostId: result.newHostId, players: lobby ? lobby.players : [],
   });
 
-  const msg = addChatMessage(result.lobbyCode, null, `${result.playerName} left the room`);
-  if (msg) io.to(result.lobbyCode).emit('chat_message', msg);
+  if (!result.gamePaused) {
+    const msg = addChatMessage(result.lobbyCode, null, `${result.playerName} left the room`);
+    if (msg) io.to(result.lobbyCode).emit('chat_message', msg);
+  }
+
+  broadcastRoomListUpdate(io);
 }
 
 // --- Save game results to PostgreSQL ---
@@ -763,6 +921,8 @@ async function saveGameResults(game, winningTeam) {
         }
       }
     }
+
+    await updatePlayerStats(client, game, winningTeam);
 
     await client.query('COMMIT');
     console.log(`Game ${gameId} saved to database`);

@@ -35,6 +35,12 @@ export default function GameScreen() {
   const canQueue = !isSpectator && state.phase === 'playing' && !isMyTurn && state.currentTrick.length >= 1 && !state.trickWonPending;
   const showBacks = !isSpectator && state.gameSettings?.blindNil && !state.cardsRevealed && state.phase === 'bidding';
 
+  // Check if a player's seat is vacant
+  const isSeatVacant = (player) => {
+    if (!player || !state.vacantSeats?.length) return false;
+    return state.vacantSeats.some(v => v.seatIndex === player.seatIndex);
+  };
+
   const handlePlayCard = (card) => {
     if (!isMyTurn || state.phase !== 'playing') return;
     socket.emit('play_card', { card });
@@ -84,6 +90,7 @@ export default function GameScreen() {
             turnTimer={state.turnTimer}
             isAfk={!!state.afkPlayers[partner?.id]}
             isBlindNil={state.blindNilPlayers?.includes(partner?.id)}
+            isVacant={isSeatVacant(partner)}
           />
         </div>
 
@@ -99,6 +106,7 @@ export default function GameScreen() {
             turnTimer={state.turnTimer}
             isAfk={!!state.afkPlayers[leftOpp?.id]}
             isBlindNil={state.blindNilPlayers?.includes(leftOpp?.id)}
+            isVacant={isSeatVacant(leftOpp)}
           />
         </div>
 
@@ -122,6 +130,7 @@ export default function GameScreen() {
             turnTimer={state.turnTimer}
             isAfk={!!state.afkPlayers[rightOpp?.id]}
             isBlindNil={state.blindNilPlayers?.includes(rightOpp?.id)}
+            isVacant={isSeatVacant(rightOpp)}
           />
         </div>
 
@@ -138,6 +147,7 @@ export default function GameScreen() {
               turnTimer={state.turnTimer}
               isAfk={!!state.afkPlayers[getRelativePlayer(0)?.id]}
               isBlindNil={state.blindNilPlayers?.includes(getRelativePlayer(0)?.id)}
+              isVacant={isSeatVacant(getRelativePlayer(0))}
             />
           ) : (
             <PlayerSeat
@@ -188,8 +198,49 @@ export default function GameScreen() {
       )}
 
       {/* Spectator indicator */}
-      {isSpectator && state.phase !== 'gameOver' && (
+      {isSpectator && state.phase !== 'gameOver' && !state.gamePaused && (
         <div className="spectating-banner">Spectating</div>
+      )}
+
+      {/* Pause overlay */}
+      {state.gamePaused && (
+        <div className="pause-overlay">
+          <div className="pause-overlay-content">
+            <h2 className="pause-title">Game Paused</h2>
+            <p className="pause-reason">Waiting for vacant seat(s) to be filled</p>
+
+            <div className="pause-seats">
+              {state.vacantSeats.map(seat => (
+                <div key={seat.seatIndex} className="pause-seat-item">
+                  <span className="pause-seat-info">
+                    <span className={`pause-team-badge team-${seat.team}`}>T{seat.team}</span>
+                    {seat.previousPlayerName} left
+                  </span>
+                  {state.isHost && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => socket.emit('fill_seat_with_bot', { seatIndex: seat.seatIndex })}
+                    >
+                      Replace with Bot
+                    </button>
+                  )}
+                  {isSpectator && !state.isHost && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => socket.emit('fill_seat', { seatIndex: seat.seatIndex })}
+                    >
+                      Take Seat
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {!state.isHost && !isSpectator && (
+              <p className="pause-hint">Waiting for the room owner to fill seats...</p>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Round summary modal */}

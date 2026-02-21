@@ -22,8 +22,18 @@ function TurnCountdown({ endsAt }) {
   );
 }
 
-export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner, turnTimer, isAfk, isBlindNil }) {
+export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner, turnTimer, isAfk, isBlindNil, isVacant }) {
   if (!player) return null;
+
+  if (isVacant) {
+    return (
+      <div className="player-seat vacant-seat">
+        <div className="player-seat-name">Vacant</div>
+        <div className="vacant-label">Waiting for player...</div>
+        <div className={`team-badge team-${player.team}`}>T{player.team}</div>
+      </div>
+    );
+  }
 
   const trickCount = tricks || 0;
   const hasBid = bid !== undefined;

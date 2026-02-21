@@ -11,6 +11,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import pool, { initDB } from './db/index.js';
 import { registerHandlers } from './socketHandlers.js';
 import { validatePreferences, mergeWithDefaults, hasCompletedSetup, PRESETS, TABLE_COLORS, DEFAULTS } from './game/preferences.js';
+import { getPlayerStats, getLeaderboard } from './db/stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -24,6 +25,7 @@ const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  name: 'spades.sid',
   cookie: {
     maxAge: 30 * 24 * 60 * 60 * 1000,
     httpOnly: true,
@@ -112,7 +114,7 @@ app.post('/auth/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });
     req.session.destroy(() => {
-      res.clearCookie('connect.sid');
+      res.clearCookie('spades.sid');
       res.json({ ok: true });
     });
   });
@@ -146,31 +148,27 @@ app.put('/api/preferences', async (req, res) => {
   }
 });
 
-// --- Stats API ---
+// --- Stats & Leaderboard API ---
 app.get('/api/stats/:userId', async (req, res) => {
   try {
     const userId = parseInt(req.params.userId, 10);
     if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' });
-
-    const result = await pool.query(`
-      SELECT
-        COUNT(*) AS games_played,
-        COUNT(*) FILTER (WHERE gp.is_winner = true) AS games_won,
-        COUNT(*) FILTER (WHERE gp.is_winner = false) AS games_lost
-      FROM game_players gp
-      JOIN games g ON g.id = gp.game_id
-      WHERE gp.user_id = $1 AND g.ended_at IS NOT NULL
-    `, [userId]);
-
-    const stats = result.rows[0];
-    res.json({
-      gamesPlayed: parseInt(stats.games_played),
-      gamesWon: parseInt(stats.games_won),
-      gamesLost: parseInt(stats.games_lost),
-    });
+    const stats = await getPlayerStats(pool, userId);
+    res.json(stats);
   } catch (err) {
     console.error('Stats query error:', err);
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const sortBy = req.query.sort || 'games_won';
+    const rows = await getLeaderboard(pool, sortBy);
+    res.json(rows);
+  } catch (err) {
+    console.error('Leaderboard query error:', err);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
 
@@ -209,6 +207,31 @@ const PORT = process.env.PORT || 3001;
 
 async function start() {
   await initDB();
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is in use. Killing the old process...`);
+      import('child_process').then(({ execSync }) => {
+        try {
+          // Find and kill the process on the port (Windows)
+          const result = execSync(`netstat -ano | findstr :${PORT} | findstr LISTENING`, { encoding: 'utf-8' });
+          const pid = result.trim().split(/\s+/).pop();
+          if (pid && pid !== '0') {
+            execSync(`taskkill /PID ${pid} /F`, { encoding: 'utf-8' });
+            console.log(`Killed PID ${pid}. Retrying...`);
+            setTimeout(() => server.listen(PORT), 1000);
+          }
+        } catch {
+          console.error(`Could not free port ${PORT}. Kill the process manually.`);
+          process.exit(1);
+        }
+      });
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  });
+
   server.listen(PORT, () => {
     console.log(`Spades server running on port ${PORT}`);
   });

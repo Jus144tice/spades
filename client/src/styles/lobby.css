@@ -492,6 +492,129 @@
   color: #000 !important;
 }
 
+/* Room Browser */
+.join-card-wide {
+  max-width: 600px;
+}
+
+.room-browser {
+  margin-top: 16px;
+}
+
+.room-browser-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.room-browser-empty {
+  text-align: center;
+  padding: 24px 0;
+  color: var(--text-secondary);
+}
+
+.room-browser-empty p {
+  margin: 4px 0;
+}
+
+.room-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.room-card {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.room-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+}
+
+.room-card-code {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+
+.room-card-status {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.room-card-status.status-waiting {
+  background: rgba(102, 187, 106, 0.2);
+  color: var(--team1);
+}
+
+.room-card-status.status-playing {
+  background: rgba(79, 195, 247, 0.2);
+  color: var(--accent);
+}
+
+.room-card-status.status-paused {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+  animation: pausePulse 2s ease-in-out infinite;
+}
+
+@keyframes pausePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.room-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-card-host {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.room-card-players {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.room-card-game-info {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.room-card-settings {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.room-card-join {
+  flex-shrink: 0;
+}
+
 /* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
   .join-screen {

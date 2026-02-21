@@ -9,6 +9,7 @@ import SetupScreen from './components/SetupScreen.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import Chat from './components/Chat.jsx';
 import RulesModal from './components/RulesModal.jsx';
+import LeaderboardModal from './components/LeaderboardModal.jsx';
 import ErrorToast from './components/ErrorToast.jsx';
 
 function useIsMobile() {
@@ -50,6 +51,7 @@ function AppContent() {
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const isMobile = useIsMobile();
   const chatOpenRef = React.useRef(chatOpen);
@@ -71,11 +73,16 @@ function AppContent() {
     if (chatOpen) setUnreadCount(0);
   }, [chatOpen]);
 
-  // Listen for rules modal open events from child screens
+  // Listen for rules/leaderboard modal open events from child screens
   useEffect(() => {
-    const handler = () => setRulesOpen(true);
-    window.addEventListener('open-rules', handler);
-    return () => window.removeEventListener('open-rules', handler);
+    const rulesHandler = () => setRulesOpen(true);
+    const lbHandler = () => setLeaderboardOpen(true);
+    window.addEventListener('open-rules', rulesHandler);
+    window.addEventListener('open-leaderboard', lbHandler);
+    return () => {
+      window.removeEventListener('open-rules', rulesHandler);
+      window.removeEventListener('open-leaderboard', lbHandler);
+    };
   }, []);
 
   if (authLoading || prefsLoading) {
@@ -124,6 +131,14 @@ function AppContent() {
         </>
       )}
       <button
+        className={`leaderboard-btn ${chatOpen && !isMobile ? 'chat-shifted' : ''}`}
+        onClick={() => setLeaderboardOpen(true)}
+        aria-label="Leaderboard"
+        title="Leaderboard"
+      >
+        {'\uD83C\uDFC6'}
+      </button>
+      <button
         className={`settings-btn ${chatOpen && !isMobile ? 'chat-shifted' : ''}`}
         onClick={() => setSettingsOpen(true)}
         aria-label="Settings"
@@ -131,6 +146,7 @@ function AppContent() {
       >
         {'\u2699'}
       </button>
+      {leaderboardOpen && <LeaderboardModal onClose={() => setLeaderboardOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
       {state.reconnecting && (

@@ -281,6 +281,45 @@ export class GameState {
     };
   }
 
+  replacePlayer(oldId, newId, newName, props = {}) {
+    const gamePlayer = this.players.find(p => p.id === oldId);
+    if (!gamePlayer) return false;
+
+    gamePlayer.id = newId;
+    if (newName !== null) gamePlayer.name = newName;
+    if (props.isBot !== undefined) gamePlayer.isBot = props.isBot;
+    if (props.userId !== undefined) gamePlayer.userId = props.userId;
+
+    // Remap all player-ID-keyed state
+    if (this.hands[oldId]) {
+      this.hands[newId] = this.hands[oldId];
+      delete this.hands[oldId];
+    }
+    if (this.bids[oldId] !== undefined) {
+      this.bids[newId] = this.bids[oldId];
+      delete this.bids[oldId];
+    }
+    if (this.tricksTaken[oldId] !== undefined) {
+      this.tricksTaken[newId] = this.tricksTaken[oldId];
+      delete this.tricksTaken[oldId];
+    }
+    if (this.playerPreferences[oldId]) {
+      this.playerPreferences[newId] = this.playerPreferences[oldId];
+      delete this.playerPreferences[oldId];
+    }
+    for (const t of this.currentTrick) {
+      if (t.playerId === oldId) t.playerId = newId;
+    }
+    for (const c of this.cardsPlayed) {
+      if (c.playerId === oldId) c.playerId = newId;
+    }
+    if (this.blindNilPlayers.has(oldId)) {
+      this.blindNilPlayers.delete(oldId);
+      this.blindNilPlayers.add(newId);
+    }
+    return true;
+  }
+
   getStateForPlayer(playerId) {
     // Re-sort hand for this specific player's preferences (hand may have been
     // initially sorted with their prefs, but this ensures correctness after mid-round changes)
