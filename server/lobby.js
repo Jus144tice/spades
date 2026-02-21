@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_GAME_SETTINGS } from './game/constants.js';
+import { getMode } from './game/modes.js';
 
 const lobbies = new Map();
 const playerSockets = new Map(); // socketId -> { playerName, lobbyCode }
@@ -176,7 +177,7 @@ export function assignTeam(lobbyCode, targetPlayerId, team) {
   const player = lobby.players.find(p => p.id === targetPlayerId);
   if (!player) return { error: 'Player not found' };
 
-  player.team = team; // 1, 2, or null
+  player.team = team; // 1, 2, 3, 4, ... or null (spectator)
   return { players: lobby.players };
 }
 
@@ -184,24 +185,36 @@ export function autoAssignTeams(lobbyCode) {
   const lobby = lobbies.get(lobbyCode);
   if (!lobby) return { error: 'Lobby not found' };
 
+  const mode = getMode(lobby.gameSettings.gameMode || 4);
+
   // Clear existing assignments
   for (const p of lobby.players) {
     p.team = null;
   }
 
-  if (lobby.players.length < 4) return { error: 'Need at least 4 players' };
+  if (lobby.players.length < mode.playerCount) {
+    return { error: `Need at least ${mode.playerCount} players` };
+  }
 
-  // Shuffle all players, assign first 4 to teams; rest are spectators
+  // Shuffle all players
   const indices = lobby.players.map((_, i) => i);
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [indices[i], indices[j]] = [indices[j], indices[i]];
   }
 
-  lobby.players[indices[0]].team = 1;
-  lobby.players[indices[1]].team = 1;
-  lobby.players[indices[2]].team = 2;
-  lobby.players[indices[3]].team = 2;
+  // Assign to teams per mode config
+  let assignIdx = 0;
+  for (let teamNum = 0; teamNum < mode.teams.length; teamNum++) {
+    const teamConfig = mode.teams[teamNum];
+    for (let s = 0; s < teamConfig.size; s++) {
+      if (assignIdx < indices.length) {
+        lobby.players[indices[assignIdx]].team = teamNum + 1;
+        assignIdx++;
+      }
+    }
+  }
+  // Remaining players stay as spectators (team: null)
 
   return { players: lobby.players };
 }
@@ -211,25 +224,50 @@ export function canStartGame(lobbyCode, requesterId) {
   if (!lobby) return { error: 'Lobby not found' };
   if (lobby.hostId !== requesterId) return { error: 'Only the host can start the game' };
 
-  const team1 = lobby.players.filter(p => p.team === 1);
-  const team2 = lobby.players.filter(p => p.team === 2);
-  if (team1.length !== 2 || team2.length !== 2) {
-    return { error: 'Each team must have exactly 2 players' };
+  const mode = getMode(lobby.gameSettings.gameMode || 4);
+
+  // Validate each team has the correct number of players
+  for (let teamNum = 0; teamNum < mode.teams.length; teamNum++) {
+    const teamConfig = mode.teams[teamNum];
+    const teamPlayers = lobby.players.filter(p => p.team === teamNum + 1);
+    if (teamPlayers.length !== teamConfig.size) {
+      return { error: `Team ${teamNum + 1} needs exactly ${teamConfig.size} player${teamConfig.size > 1 ? 's' : ''}` };
+    }
   }
 
   return { valid: true };
 }
 
-// Arrange players so teammates sit across (0+2=team1, 1+3=team2)
-export function arrangeSeating(players) {
-  const team1 = players.filter(p => p.team === 1);
-  const team2 = players.filter(p => p.team === 2);
-  const seated = [
-    { ...team1[0], seatIndex: 0 },
-    { ...team2[0], seatIndex: 1 },
-    { ...team1[1], seatIndex: 2 },
-    { ...team2[1], seatIndex: 3 },
-  ];
+/**
+ * Arrange players so teammates sit across from each other.
+ * Algorithm: for each "round" (0 to maxTeamSize-1), seat one player from each team.
+ * For 4-player this produces [T1a, T2a, T1b, T2b] at seats 0-3 — identical to the classic layout.
+ */
+export function arrangeSeating(players, mode) {
+  const modeConfig = mode || getMode(4);
+
+  // Group players by team number
+  const teamGroups = {};
+  for (const tc of modeConfig.teams) {
+    const teamNum = parseInt(tc.id.replace('team', ''), 10);
+    teamGroups[teamNum] = players.filter(p => p.team === teamNum);
+  }
+
+  const seated = [];
+  let seatIndex = 0;
+  const maxTeamSize = Math.max(...modeConfig.teams.map(t => t.size));
+
+  for (let round = 0; round < maxTeamSize; round++) {
+    for (const tc of modeConfig.teams) {
+      const teamNum = parseInt(tc.id.replace('team', ''), 10);
+      const teamPlayers = teamGroups[teamNum];
+      if (round < teamPlayers.length) {
+        seated.push({ ...teamPlayers[round], seatIndex });
+        seatIndex++;
+      }
+    }
+  }
+
   return seated;
 }
 
@@ -257,6 +295,12 @@ export function updateGameSettings(lobbyCode, settings) {
   if (typeof settings.blindNil === 'boolean') s.blindNil = settings.blindNil;
   if (typeof settings.moonshot === 'boolean') s.moonshot = settings.moonshot;
   if (typeof settings.tenBidBonus === 'boolean') s.tenBidBonus = settings.tenBidBonus;
+  if (typeof settings.gameMode === 'number') {
+    const validModes = [3, 4, 5, 6, 7, 8];
+    if (validModes.includes(settings.gameMode)) {
+      s.gameMode = settings.gameMode;
+    }
+  }
 
   return { gameSettings: { ...s } };
 }
@@ -387,6 +431,8 @@ export function getRoomList() {
     const humanCount = lobby.players.filter(p => !p.isBot).length;
     if (humanCount === 0) continue;
 
+    const mode = getMode(lobby.gameSettings.gameMode || 4);
+
     const teamPlayers = lobby.game
       ? lobby.game.players
       : lobby.players.filter(p => p.team !== null);
@@ -400,10 +446,11 @@ export function getRoomList() {
       code,
       hostName: lobby.players.find(p => p.id === lobby.hostId)?.name || 'Unknown',
       playerCount: teamPlayers.length,
-      maxPlayers: 4,
+      maxPlayers: mode.playerCount,
       spectatorCount: spectators.length,
       status: lobby.paused ? 'paused' : lobby.game ? 'playing' : 'waiting',
       vacantSeats: lobby.vacantSeats.length,
+      gameMode: mode.playerCount,
       gameInfo: lobby.game ? {
         scores: { ...lobby.game.scores },
         roundNumber: lobby.game.roundNumber,

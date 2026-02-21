@@ -41,6 +41,8 @@ const initialState = {
   roomList: [],
   gamePaused: false,
   vacantSeats: [],
+  playerCount: 4,
+  mode: null,
 };
 
 function gameReducer(state, action) {
@@ -93,6 +95,8 @@ function gameReducer(state, action) {
           isSpectator: true,
           gamePaused: action.data.paused || false,
           vacantSeats: action.data.vacantSeats || [],
+          playerCount: action.data.gameState.playerCount || action.data.players.length,
+          mode: action.data.gameState.mode || null,
         };
       }
       return {
@@ -167,6 +171,8 @@ function gameReducer(state, action) {
         afkPlayers: {},
         blindNilPlayers: action.data.blindNilPlayers || [],
         cardsRevealed: false,
+        playerCount: action.data.playerCount || action.data.players.length,
+        mode: action.data.mode || null,
       };
 
     case 'BID_PLACED': {
@@ -185,7 +191,7 @@ function gameReducer(state, action) {
 
     case 'CARD_PLAYED': {
       const newHand = action.data.playerId === state.playerId
-        ? state.hand.filter(c => !(c.suit === action.data.card.suit && c.rank === action.data.card.rank))
+        ? state.hand.filter(c => !(c.suit === action.data.card.suit && c.rank === action.data.card.rank && !!c.mega === !!action.data.card.mega))
         : state.hand;
       // If a new card arrives while we're still showing a completed trick,
       // it belongs to the next trick — clear the old one first
@@ -347,6 +353,8 @@ function gameReducer(state, action) {
         gameSettings: action.data.gameSettings || state.gameSettings,
         gamePaused: false,
         vacantSeats: [],
+        playerCount: action.data.playerCount || action.data.players.length,
+        mode: action.data.mode || null,
       };
 
     case 'LEAVE':
@@ -395,6 +403,8 @@ function gameReducer(state, action) {
           reconnecting: false,
           gamePaused: d.gamePaused || false,
           vacantSeats: d.vacantSeats || [],
+          playerCount: d.playerCount || d.players.length,
+          mode: d.mode || null,
         };
       }
       // Lobby rejoin

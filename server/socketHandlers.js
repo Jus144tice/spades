@@ -10,6 +10,8 @@ import pool from './db/index.js';
 import { updatePlayerStats } from './db/stats.js';
 import { mergeWithDefaults } from './game/preferences.js';
 import { AFK_TURN_TIMEOUT, AFK_THRESHOLD } from './game/constants.js';
+import { getMode } from './game/modes.js';
+import { teamKeyToNum } from './game/modeHelpers.js';
 import {
   getAfkState, getPlayerAfk, getPlayerTimeout, resetPlayerAfk, incrementAfk,
   clearTurnTimer, clearRoundTimers, cleanupAfkState, remapPlayerAfk,
@@ -79,19 +81,18 @@ function buildBotGameState(game) {
     players: game.players,
     spadesBroken: game.spadesBroken,
     cardsPlayed: game.cardsPlayed,
+    mode: game.mode,
+    teamLookup: game.teamLookup,
   };
 }
 
 function getBidContext(game, playerId) {
-  const playerIndex = game.players.findIndex(p => p.id === playerId);
-  const partnerIndex = (playerIndex + 2) % 4;
-  const partnerId = game.players[partnerIndex].id;
-  const opp1Index = (playerIndex + 1) % 4;
-  const opp2Index = (playerIndex + 3) % 4;
+  const partnerIds = game.teamLookup.getPartnerIds(playerId);
+  const opponentIds = game.teamLookup.getOpponentIds(playerId);
   return {
     hand: game.hands[playerId],
-    partnerBid: game.bids[partnerId],
-    opponentBids: [game.bids[game.players[opp1Index].id], game.bids[game.players[opp2Index].id]],
+    partnerBid: partnerIds.length > 0 ? game.bids[partnerIds[0]] : undefined,
+    opponentBids: opponentIds.map(id => game.bids[id]),
   };
 }
 
@@ -254,8 +255,9 @@ export function registerHandlers(io, socket) {
     }
 
     const lobby = getLobby(info.lobbyCode);
+    const mode = getMode(lobby.gameSettings.gameMode || 4);
     const teamPlayers = lobby.players.filter(p => p.team !== null);
-    const seatedPlayers = arrangeSeating(teamPlayers);
+    const seatedPlayers = arrangeSeating(teamPlayers, mode);
 
     // Fetch preferences for all human players
     const playerPreferences = {};
@@ -278,7 +280,7 @@ export function registerHandlers(io, socket) {
       }
     }
 
-    lobby.game = new GameState(seatedPlayers, playerPreferences, lobby.gameSettings);
+    lobby.game = new GameState(seatedPlayers, playerPreferences, lobby.gameSettings, mode);
 
     const msg = addChatMessage(info.lobbyCode, null, 'The game has started!');
     io.to(info.lobbyCode).emit('chat_message', msg);
@@ -423,12 +425,23 @@ export function registerHandlers(io, socket) {
 
       let gameOverData = null;
       if (lobby.game.phase === 'gameOver') {
-        const winTarget = lobby.game.settings?.winTarget || 500;
-        const winner = lobby.game.scores.team1 >= winTarget ? 'team1' : 'team2';
+        // Determine winner dynamically: check for moonshot or highest score
+        const lastRound = lobby.game.roundHistory[lobby.game.roundHistory.length - 1];
+        let winner;
+        if (lastRound && lastRound.moonshot) {
+          winner = lastRound.moonshot;
+        } else {
+          const scores = lobby.game.scores;
+          const teamKeys = Object.keys(scores);
+          winner = teamKeys.reduce((best, tk) =>
+            (scores[tk] || 0) > (scores[best] || 0) ? tk : best
+          );
+        }
+        const winTeamNum = teamKeyToNum(winner);
         gameOverData = {
           winningTeam: winner,
           winningPlayers: lobby.game.players
-            .filter(p => p.team === (winner === 'team1' ? 1 : 2)).map(p => p.name),
+            .filter(p => p.team === winTeamNum).map(p => p.name),
           finalScores: lobby.game.scores,
           roundHistory: lobby.game.roundHistory,
         };
@@ -644,8 +657,9 @@ function handleRoundOver(io, lobbyCode, lobby, result) {
     io.to(lobbyCode).emit('round_scored', { roundSummary, scores, books });
 
     if (gameOver) {
+      const winTeamNum = teamKeyToNum(winningTeam);
       const winTeamPlayers = gamePlayers
-        .filter(p => p.team === (winningTeam === 'team1' ? 1 : 2))
+        .filter(p => p.team === winTeamNum)
         .map(p => p.name);
 
       io.to(lobbyCode).emit('game_over', {
@@ -884,11 +898,12 @@ async function saveGameResults(game, winningTeam) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const winTeamNum = winningTeam === 'team1' ? 1 : 2;
+    const winTeamNum = teamKeyToNum(winningTeam);
 
+    const gameMode = game.mode?.playerCount || 4;
     const gameRes = await client.query(
-      `INSERT INTO games (ended_at, winning_team) VALUES (NOW(), $1) RETURNING id`,
-      [winTeamNum]
+      `INSERT INTO games (ended_at, winning_team, game_mode) VALUES (NOW(), $1, $2) RETURNING id`,
+      [winTeamNum, gameMode]
     );
     const gameId = gameRes.rows[0].id;
 
@@ -902,12 +917,28 @@ async function saveGameResults(game, winningTeam) {
     }
 
     for (const round of game.roundHistory) {
+      // Legacy 2-team columns (backward compat)
       await client.query(
         `INSERT INTO game_rounds (game_id, round_number, team1_round_score, team2_round_score, team1_total, team2_total, team1_bags, team2_bags)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [gameId, round.roundNumber, round.team1Score, round.team2Score,
          round.team1Total, round.team2Total, round.team1Books || 0, round.team2Books || 0]
       );
+
+      // Normalized N-team round scores
+      if (round.teamScores) {
+        for (const [teamKey, score] of Object.entries(round.teamScores)) {
+          const teamNum = teamKeyToNum(teamKey);
+          await client.query(
+            `INSERT INTO team_round_scores (game_id, round_number, team_number, round_score, total_score, bags)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [gameId, round.roundNumber, teamNum,
+             score === 'MOONSHOT' ? 0 : score,
+             round.teamTotals?.[teamKey] ?? 0,
+             round.teamBooks?.[teamKey] ?? 0]
+          );
+        }
+      }
 
       for (const player of game.players) {
         const bid = round.bids[player.id];

@@ -34,11 +34,23 @@ export default function RoundSummaryModal() {
 
   if (!summary) return null;
 
-  const team1Players = state.players.filter(p => p.team === 1);
-  const team2Players = state.players.filter(p => p.team === 2);
-
-  const team1Analysis = analyzeTeam(team1Players, summary, 'team1');
-  const team2Analysis = analyzeTeam(team2Players, summary, 'team2');
+  // Build dynamic teams
+  const teamNums = [...new Set(state.players.map(p => p.team))].sort((a, b) => a - b);
+  const teamAnalyses = teamNums.map(teamNum => {
+    const teamKey = 'team' + teamNum;
+    const teamPlayers = state.players.filter(p => p.team === teamNum);
+    const score = summary.teamScores?.[teamKey] ?? summary[`team${teamNum}Score`] ?? 0;
+    const total = summary.teamTotals?.[teamKey] ?? summary[`team${teamNum}Total`] ?? 0;
+    const books = summary.teamBooks?.[teamKey] ?? summary[`team${teamNum}Books`] ?? 0;
+    return {
+      teamNum,
+      teamKey,
+      analysis: analyzeTeam(teamPlayers, summary, teamKey),
+      score,
+      total,
+      books,
+    };
+  });
 
   const handleContinue = () => {
     dispatch({ type: 'CLEAR_ROUND_SUMMARY' });
@@ -50,25 +62,19 @@ export default function RoundSummaryModal() {
       <div className="modal round-summary-modal">
         <h2>Round {summary.roundNumber} Results</h2>
 
-        <TeamSummary
-          analysis={team1Analysis}
-          teamLabel="Team 1"
-          teamClass="team1"
-          score={summary.team1Score}
-          total={summary.team1Total}
-          books={summary.team1Books}
-        />
-
-        <div className="summary-divider" />
-
-        <TeamSummary
-          analysis={team2Analysis}
-          teamLabel="Team 2"
-          teamClass="team2"
-          score={summary.team2Score}
-          total={summary.team2Total}
-          books={summary.team2Books}
-        />
+        {teamAnalyses.map((t, i) => (
+          <React.Fragment key={t.teamKey}>
+            {i > 0 && <div className="summary-divider" />}
+            <TeamSummary
+              analysis={t.analysis}
+              teamLabel={`Team ${t.teamNum}`}
+              teamClass={t.teamKey}
+              score={t.score}
+              total={t.total}
+              books={t.books}
+            />
+          </React.Fragment>
+        ))}
 
         <button className="btn btn-primary" onClick={handleContinue}>
           Continue {countdown > 0 ? `(${countdown}s)` : ''}
@@ -80,14 +86,14 @@ export default function RoundSummaryModal() {
 
 function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
   const madeOrMissed = analysis.madeBid;
-  const scorePositive = score > 0;
+  const scorePositive = typeof score === 'number' && score > 0;
 
   return (
     <div className={`summary-section summary-${teamClass}`}>
       <div className="summary-header">
         <h3>{teamLabel} &mdash; {analysis.names}</h3>
         <div className={`summary-result ${madeOrMissed ? 'made' : 'set'}`}>
-          {analysis.allNil ? (madeOrMissed ? 'NIL SUCCESS' : 'NIL FAILED') : (madeOrMissed ? 'MADE' : 'SET')}
+          {score === 'MOONSHOT' ? 'MOONSHOT!' : analysis.allNil ? (madeOrMissed ? 'NIL SUCCESS' : 'NIL FAILED') : (madeOrMissed ? 'MADE' : 'SET')}
         </div>
       </div>
 
@@ -112,48 +118,50 @@ function TeamSummary({ analysis, teamLabel, teamClass, score, total, books }) {
       </div>
 
       {/* Score breakdown */}
-      <div className="summary-breakdown">
-        {analysis.bidPoints !== 0 && (
-          <div className="breakdown-line">
-            <span>Bid ({analysis.combinedBid})</span>
-            <span className={analysis.bidPoints > 0 ? 'positive' : 'negative'}>
-              {analysis.bidPoints > 0 ? '+' : ''}{analysis.bidPoints}
+      {score !== 'MOONSHOT' && (
+        <div className="summary-breakdown">
+          {analysis.bidPoints !== 0 && (
+            <div className="breakdown-line">
+              <span>Bid ({analysis.combinedBid})</span>
+              <span className={analysis.bidPoints > 0 ? 'positive' : 'negative'}>
+                {analysis.bidPoints > 0 ? '+' : ''}{analysis.bidPoints}
+              </span>
+            </div>
+          )}
+          {analysis.nilPoints.map((np, i) => (
+            <div key={i} className="breakdown-line">
+              <span>{np.name} {np.isBlindNil ? 'Blind Nil' : 'Nil'}</span>
+              <span className={np.points > 0 ? 'positive' : 'negative'}>
+                {np.points > 0 ? '+' : ''}{np.points}
+              </span>
+            </div>
+          ))}
+          {analysis.overtricks > 0 && (
+            <div className="breakdown-line">
+              <span>Books (+{analysis.overtricks})</span>
+              <span className="books">+{analysis.overtricks}</span>
+            </div>
+          )}
+          {analysis.tenTrickBonus && (
+            <div className="breakdown-line bonus-line">
+              <span>10+ Trick Bonus</span>
+              <span className="positive">+{TEN_TRICK_BONUS}</span>
+            </div>
+          )}
+          {analysis.bagPenalty > 0 && (
+            <div className="breakdown-line penalty-line">
+              <span>Book Penalty (10 books)</span>
+              <span className="negative">-{analysis.bagPenalty}</span>
+            </div>
+          )}
+          <div className="breakdown-total">
+            <span>Round Score</span>
+            <span className={scorePositive ? 'positive' : 'negative'}>
+              {scorePositive ? '+' : ''}{score}
             </span>
           </div>
-        )}
-        {analysis.nilPoints.map((np, i) => (
-          <div key={i} className="breakdown-line">
-            <span>{np.name} {np.isBlindNil ? 'Blind Nil' : 'Nil'}</span>
-            <span className={np.points > 0 ? 'positive' : 'negative'}>
-              {np.points > 0 ? '+' : ''}{np.points}
-            </span>
-          </div>
-        ))}
-        {analysis.overtricks > 0 && (
-          <div className="breakdown-line">
-            <span>Books (+{analysis.overtricks})</span>
-            <span className="books">+{analysis.overtricks}</span>
-          </div>
-        )}
-        {analysis.tenTrickBonus && (
-          <div className="breakdown-line bonus-line">
-            <span>10+ Trick Bonus</span>
-            <span className="positive">+{TEN_TRICK_BONUS}</span>
-          </div>
-        )}
-        {analysis.bagPenalty > 0 && (
-          <div className="breakdown-line penalty-line">
-            <span>Book Penalty (10 books)</span>
-            <span className="negative">-{analysis.bagPenalty}</span>
-          </div>
-        )}
-        <div className="breakdown-total">
-          <span>Round Score</span>
-          <span className={scorePositive ? 'positive' : 'negative'}>
-            {scorePositive ? '+' : ''}{score}
-          </span>
         </div>
-      </div>
+      )}
 
       {/* Running total */}
       <div className="summary-total-row">
@@ -218,11 +226,8 @@ function analyzeTeam(teamPlayers, summary, teamKey) {
   const tenTrickBonus = totalTeamTricks >= 10 && combinedBid > 0 && madeBid;
 
   // Book penalty
-  // We check the books AFTER adding overtricks. The summary already has post-penalty books.
-  // We can infer penalty if score has a -100 component. Simpler: check current books from summary.
-  const prevBooks = summary[`${teamKey}Books`];
-  // Note: bagPenalty is already factored into the round score. We figure out if it happened.
-  const bagPenalty = computeBagPenalty(summary, teamKey, overtricks);
+  const currentBooks = summary.teamBooks?.[teamKey] ?? summary[`${teamKey}Books`] ?? 0;
+  const bagPenalty = overtricks > 0 && currentBooks < overtricks ? BOOK_PENALTY : 0;
 
   return {
     names,
@@ -236,18 +241,4 @@ function analyzeTeam(teamPlayers, summary, teamKey) {
     tenTrickBonus,
     bagPenalty,
   };
-}
-
-function computeBagPenalty(summary, teamKey, overtricks) {
-  // The round score should equal: bidPoints + nilPoints + overtricks + tenTrickBonus - bagPenalty
-  // We can back-calculate if there was a book penalty by checking if the reported score
-  // is less than expected. But it's simpler to just check: the score in the summary
-  // already includes the penalty. We'll just show it if the books wrapped around.
-  // Since books shown are post-penalty, if books < overtricks and overtricks > 0, penalty happened.
-  const currentBooks = summary[`${teamKey}Books`];
-  if (overtricks > 0 && currentBooks < overtricks) {
-    // Books wrapped around - penalty was applied
-    return BOOK_PENALTY;
-  }
-  return 0;
 }

@@ -114,6 +114,31 @@
   margin-top: 4px;
 }
 
+/* Extra teams (3+) displayed in center column */
+.score-extra-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.score-extra-team {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.score-extra-name {
+  color: var(--text-secondary);
+}
+
+.score-extra-value {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .score-history-overlay {
   position: fixed;
   inset: 0;
@@ -877,4 +902,56 @@
     font-size: 12px;
     flex-shrink: 0;
   }
+}
+
+/* ===== Polygon Layout (N-player, non-4p) ===== */
+.game-table-polygon {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  padding: 12px;
+}
+
+.game-table-polygon .trick-area {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+}
+
+.seat-polygon .player-seat {
+  max-width: 140px;
+}
+
+.seat-bottom-polygon {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Team badge colors for teams 3 and 4 */
+.team-badge.team-3 {
+  background: #ab47bc;
+  color: #fff;
+}
+
+.team-badge.team-4 {
+  background: #26a69a;
+  color: #fff;
+}
+
+.pause-team-badge.team-3 {
+  background: #ab47bc;
+  color: #fff;
+}
+
+.pause-team-badge.team-4 {
+  background: #26a69a;
+  color: #fff;
 }

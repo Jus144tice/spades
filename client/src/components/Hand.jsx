@@ -23,7 +23,7 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
 
   const canPlayCard = (card) => isMyTurn && isLegalPlay(card);
   const canQueueCard = (card) => canQueue && isLegalPlay(card);
-  const isQueued = (card) => queuedCard && queuedCard.suit === card.suit && queuedCard.rank === card.rank;
+  const isQueued = (card) => queuedCard && queuedCard.suit === card.suit && queuedCard.rank === card.rank && !!queuedCard.mega === !!card.mega;
 
   const handleTouch = (card, index, playable, queueable) => {
     if (queueable) {
@@ -47,7 +47,7 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
       <div className="hand">
         {cards.map((card, i) => (
           <div
-            key={`${card.suit}${card.rank}`}
+            key={`${card.suit}${card.rank}${card.mega ? 'M' : ''}`}
             className="hand-card"
             style={{ '--i': i, '--total': cards.length }}
           >
@@ -71,7 +71,7 @@ export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spades
         const cardDisabled = isPlaying && (isMyTurn || canQueue) && !playable && !queueable;
         return (
           <div
-            key={`${card.suit}${card.rank}`}
+            key={`${card.suit}${card.rank}${card.mega ? 'M' : ''}`}
             className={`hand-card ${playable ? 'playable' : ''} ${queueable ? 'queueable' : ''} ${queued ? 'queued' : ''} ${viewing ? 'viewing' : ''} ${touchedIndex === i ? 'touched' : ''}`}
             style={{ '--i': i, '--total': cards.length }}
             onTouchEnd={(e) => {

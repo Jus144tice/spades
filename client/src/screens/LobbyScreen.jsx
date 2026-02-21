@@ -8,6 +8,8 @@ export default function LobbyScreen() {
   const socket = useSocket();
   const { state, dispatch } = useGame();
 
+  const gameMode = state.gameSettings?.gameMode || 4;
+
   const handleAutoAssign = () => {
     socket.emit('auto_assign_teams');
   };
@@ -29,13 +31,14 @@ export default function LobbyScreen() {
     socket.emit('remove_bot', { botId });
   };
 
-  const team1Count = state.players.filter(p => p.team === 1).length;
-  const team2Count = state.players.filter(p => p.team === 2).length;
-  const allTeamsSet = team1Count === 2 && team2Count === 2;
+  // Dynamic team count check
+  const assignedCount = state.players.filter(p => p.team !== null).length;
+  const spectatorCount = state.players.length - assignedCount;
 
-  const bots = state.players.filter(p => p.isBot);
+  // Check all teams are fully assigned for mode
+  const allTeamsSet = assignedCount === gameMode;
+
   const canAddBot = state.isHost && state.players.length < 10;
-  const spectatorCount = state.players.length - team1Count - team2Count;
 
   return (
     <div className="lobby-screen">
@@ -48,7 +51,7 @@ export default function LobbyScreen() {
 
       <div className="lobby-players">
         <div className="player-count">
-          Players: {team1Count + team2Count} / 4
+          Players: {assignedCount} / {gameMode}
           {spectatorCount > 0 && <span className="spectator-count"> &middot; {spectatorCount} spectator{spectatorCount !== 1 ? 's' : ''}</span>}
         </div>
         <TeamPicker onRemoveBot={handleRemoveBot} />
@@ -66,8 +69,8 @@ export default function LobbyScreen() {
           <button
             className="btn btn-secondary"
             onClick={handleAutoAssign}
-            disabled={state.players.length < 4}
-            title={state.players.length < 4 ? 'Need at least 4 players' : 'Randomly assign teams'}
+            disabled={state.players.length < gameMode}
+            title={state.players.length < gameMode ? `Need at least ${gameMode} players` : 'Randomly assign teams'}
           >
             Randomize Teams
           </button>
@@ -77,7 +80,7 @@ export default function LobbyScreen() {
             className="btn btn-primary"
             onClick={handleStartGame}
             disabled={!allTeamsSet}
-            title={!allTeamsSet ? 'Need 4 players with teams assigned' : ''}
+            title={!allTeamsSet ? `Need ${gameMode} players with teams assigned` : ''}
           >
             Start Game
           </button>

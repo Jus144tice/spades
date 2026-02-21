@@ -13,6 +13,18 @@ export const SUIT_NAME = {
   C: 'Clubs',
 };
 
+// Mega card rank offset: mega cards beat same-rank regular but lose to next rank up
+export const MEGA_RANK_OFFSET = 0.5;
+
+/**
+ * Get the effective numeric value of a card for comparison purposes.
+ * Mega cards get +0.5 to their rank value, so mega 2 (2.5) beats regular 2 (2)
+ * but loses to regular 3 (3).
+ */
+export function getCardValue(card) {
+  return RANK_VALUE[card.rank] + (card.mega ? MEGA_RANK_OFFSET : 0);
+}
+
 export const WINNING_SCORE = 500;
 export const BOOK_PENALTY_THRESHOLD = 10;
 export const BOOK_PENALTY = 100;
@@ -32,4 +44,5 @@ export const DEFAULT_GAME_SETTINGS = {
   blindNil: false,
   moonshot: true,
   tenBidBonus: true,
+  gameMode: 4,
 };

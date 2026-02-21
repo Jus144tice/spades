@@ -29,8 +29,14 @@ export default function GameOverModal() {
 
   if (!data) return null;
 
-  const team1Names = state.players.filter(p => p.team === 1).map(p => p.name).join(' & ');
-  const team2Names = state.players.filter(p => p.team === 2).map(p => p.name).join(' & ');
+  // Build dynamic teams
+  const teamNums = [...new Set(state.players.map(p => p.team))].sort((a, b) => a - b);
+  const teams = teamNums.map(teamNum => {
+    const teamKey = 'team' + teamNum;
+    const teamPlayers = state.players.filter(p => p.team === teamNum);
+    const names = teamPlayers.map(p => p.name).join(' & ');
+    return { teamNum, teamKey, names };
+  });
 
   const handlePlayAgain = () => {
     socket.emit('return_to_lobby');
@@ -49,14 +55,12 @@ export default function GameOverModal() {
           {data.winningPlayers.join(' & ')} win!
         </div>
         <div className="final-scores">
-          <div className="final-score-row">
-            <span>{team1Names}</span>
-            <span className="final-score-value">{data.finalScores.team1}</span>
-          </div>
-          <div className="final-score-row">
-            <span>{team2Names}</span>
-            <span className="final-score-value">{data.finalScores.team2}</span>
-          </div>
+          {teams.map(t => (
+            <div key={t.teamKey} className="final-score-row">
+              <span>{t.names}</span>
+              <span className="final-score-value">{data.finalScores?.[t.teamKey] ?? data.finalScores?.[`team${t.teamNum}`] ?? 0}</span>
+            </div>
+          ))}
         </div>
 
         {data.roundHistory && data.roundHistory.length > 0 && (
@@ -66,16 +70,24 @@ export default function GameOverModal() {
               <thead>
                 <tr>
                   <th>Rd</th>
-                  <th>{team1Names}</th>
-                  <th>{team2Names}</th>
+                  {teams.map(t => (
+                    <th key={t.teamKey}>{t.names}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {data.roundHistory.map((r, i) => (
                   <tr key={i}>
                     <td>{r.roundNumber}</td>
-                    <td>{r.team1Score > 0 ? '+' : ''}{r.team1Score} ({r.team1Total})</td>
-                    <td>{r.team2Score > 0 ? '+' : ''}{r.team2Score} ({r.team2Total})</td>
+                    {teams.map(t => {
+                      const score = r.teamScores?.[t.teamKey] ?? r[`team${t.teamNum}Score`] ?? 0;
+                      const total = r.teamTotals?.[t.teamKey] ?? r[`team${t.teamNum}Total`] ?? 0;
+                      return (
+                        <td key={t.teamKey}>
+                          {score > 0 ? '+' : ''}{score === 'MOONSHOT' ? 'MOONSHOT' : score} ({total})
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

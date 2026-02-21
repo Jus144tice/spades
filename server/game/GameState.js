@@ -1,18 +1,23 @@
 import { createDeck, shuffle, deal } from './deck.js';
 import { validatePlay, determineTrickWinner } from './tricks.js';
 import { scoreRound, checkWinner } from './scoring.js';
-import { RANK_VALUE, DEFAULT_GAME_SETTINGS } from './constants.js';
+import { getCardValue, DEFAULT_GAME_SETTINGS } from './constants.js';
 import { parseCardSort, DEFAULTS } from './preferences.js';
+import { getMode } from './modes.js';
+import { buildTeamLookup, initTeamScores, getTeamKeys } from './modeHelpers.js';
 
 export class GameState {
-  constructor(players, playerPreferences = {}, gameSettings = {}) {
-    // players: [{ id, name, team }] - ordered so 0+2=team1, 1+3=team2
+  constructor(players, playerPreferences = {}, gameSettings = {}, mode) {
+    // players: [{ id, name, team, seatIndex }] - ordered by seating
     this.players = players;
+    this.playerCount = players.length;
     // playerPreferences: { playerId: { cardSort, tableColor } }
     this.playerPreferences = playerPreferences;
     this.settings = { ...DEFAULT_GAME_SETTINGS, ...gameSettings };
+    this.mode = mode || getMode(this.playerCount);
+    this.teamLookup = buildTeamLookup(this.mode, this.players);
     this.phase = 'bidding'; // bidding | playing | scoring | gameOver
-    this.dealerIndex = Math.floor(Math.random() * 4);
+    this.dealerIndex = Math.floor(Math.random() * this.playerCount);
     this.hands = {};
     this.bids = {};
     this.blindNilPlayers = new Set();
@@ -21,8 +26,8 @@ export class GameState {
     this.currentTurnIndex = -1;
     this.trickLeaderIndex = -1;
     this.spadesBroken = false;
-    this.scores = { team1: 0, team2: 0 };
-    this.books = { team1: 0, team2: 0 };
+    this.scores = initTeamScores(this.mode);
+    this.books = initTeamScores(this.mode);
     this.roundNumber = 0;
     this.roundHistory = [];
     this.tricksPlayed = 0;
@@ -47,16 +52,16 @@ export class GameState {
     }
 
     // Deal cards
-    const deck = shuffle(createDeck());
-    const hands = deal(deck);
-    for (let i = 0; i < 4; i++) {
+    const deck = shuffle(createDeck(this.mode));
+    const hands = deal(deck, this.playerCount);
+    for (let i = 0; i < this.playerCount; i++) {
       const pid = this.players[i].id;
       const prefs = this.playerPreferences[pid];
       this.hands[pid] = this.sortHand(hands[i], prefs);
     }
 
     // Bidding starts left of dealer
-    this.currentTurnIndex = (this.dealerIndex + 1) % 4;
+    this.currentTurnIndex = (this.dealerIndex + 1) % this.playerCount;
   }
 
   sortHand(hand, prefs) {
@@ -67,7 +72,7 @@ export class GameState {
       if (suitOrder[a.suit] !== suitOrder[b.suit]) {
         return suitOrder[a.suit] - suitOrder[b.suit];
       }
-      return rankMul * (RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
+      return rankMul * (getCardValue(a) - getCardValue(b));
     });
   }
 
@@ -82,8 +87,8 @@ export class GameState {
     if (this.getCurrentTurnPlayerId() !== playerId) {
       return { error: 'Not your turn to bid' };
     }
-    if (!Number.isInteger(bid) || bid < 0 || bid > 13) {
-      return { error: 'Bid must be 0-13' };
+    if (!Number.isInteger(bid) || bid < 0 || bid > this.mode.cardsPerPlayer) {
+      return { error: `Bid must be 0-${this.mode.cardsPerPlayer}` };
     }
 
     // Blind nil validation
@@ -102,16 +107,16 @@ export class GameState {
     }
 
     // Check if all bids are in
-    if (Object.keys(this.bids).length === 4) {
+    if (Object.keys(this.bids).length === this.playerCount) {
       this.phase = 'playing';
       // First lead is left of dealer
-      this.currentTurnIndex = (this.dealerIndex + 1) % 4;
+      this.currentTurnIndex = (this.dealerIndex + 1) % this.playerCount;
       this.trickLeaderIndex = this.currentTurnIndex;
       return { allBidsIn: true, nextTurnId: this.getCurrentTurnPlayerId() };
     }
 
     // Next bidder
-    this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
+    this.currentTurnIndex = (this.currentTurnIndex + 1) % this.playerCount;
     return { allBidsIn: false, nextTurnId: this.getCurrentTurnPlayerId() };
   }
 
@@ -124,7 +129,7 @@ export class GameState {
     }
 
     const hand = this.hands[playerId];
-    const cardIndex = hand.findIndex(c => c.suit === card.suit && c.rank === card.rank);
+    const cardIndex = hand.findIndex(c => c.suit === card.suit && c.rank === card.rank && !!c.mega === !!card.mega);
     if (cardIndex === -1) {
       return { error: 'You don\'t have that card' };
     }
@@ -144,7 +149,7 @@ export class GameState {
     }
 
     // Trick complete?
-    if (this.currentTrick.length === 4) {
+    if (this.currentTrick.length === this.playerCount) {
       const winnerId = determineTrickWinner(this.currentTrick);
       this.tricksTaken[winnerId]++;
       this.tricksPlayed++;
@@ -156,8 +161,8 @@ export class GameState {
       }
       this.currentTrick = [];
 
-      // All 13 tricks done?
-      if (this.tricksPlayed === 13) {
+      // All tricks done?
+      if (this.tricksPlayed === this.mode.tricksPerRound) {
         return this.endRound(winnerId, completedTrick);
       }
 
@@ -174,7 +179,7 @@ export class GameState {
     }
 
     // Next player's turn
-    this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
+    this.currentTurnIndex = (this.currentTurnIndex + 1) % this.playerCount;
     return {
       trickComplete: false,
       nextTurnId: this.getCurrentTurnPlayerId(),
@@ -183,28 +188,43 @@ export class GameState {
 
   endRound(lastTrickWinnerId, lastTrick) {
     this.phase = 'scoring';
+    const teamKeys = getTeamKeys(this.mode);
 
     // Moonshot check: team bids 13 combined and takes all 13 tricks = instant win
     if (this.settings.moonshot) {
-      const teams = {
-        team1: [this.players[0].id, this.players[2].id],
-        team2: [this.players[1].id, this.players[3].id],
-      };
-      for (const [teamKey, playerIds] of Object.entries(teams)) {
+      const { teamsByKey } = this.teamLookup;
+      for (const teamKey of teamKeys) {
+        const playerIds = teamsByKey[teamKey];
         const combinedBid = playerIds.reduce((sum, id) => sum + this.bids[id], 0);
         const combinedTricks = playerIds.reduce((sum, id) => sum + this.tricksTaken[id], 0);
-        if (combinedBid === 13 && combinedTricks === 13) {
+        if (combinedBid === this.mode.tricksPerRound && combinedTricks === this.mode.tricksPerRound) {
           this.phase = 'gameOver';
+
+          // Build dynamic team scores for round summary
+          const teamScores = {};
+          const teamTotals = {};
+          const teamBooks = {};
+          for (const tk of teamKeys) {
+            teamScores[tk] = tk === teamKey ? 'MOONSHOT' : 0;
+            teamTotals[tk] = this.scores[tk];
+            teamBooks[tk] = this.books[tk];
+          }
+
           const roundSummary = {
             roundNumber: this.roundNumber,
             bids: { ...this.bids },
             tricksTaken: { ...this.tricksTaken },
-            team1Score: teamKey === 'team1' ? 'MOONSHOT' : 0,
-            team2Score: teamKey === 'team2' ? 'MOONSHOT' : 0,
-            team1Total: this.scores.team1,
-            team2Total: this.scores.team2,
-            team1Books: this.books.team1,
-            team2Books: this.books.team2,
+            // Dynamic N-team fields
+            teamScores,
+            teamTotals,
+            teamBooks,
+            // Backward-compat flat fields (for 4-player clients)
+            team1Score: teamScores.team1 ?? 0,
+            team2Score: teamScores.team2 ?? 0,
+            team1Total: this.scores.team1 ?? 0,
+            team2Total: this.scores.team2 ?? 0,
+            team1Books: this.books.team1 ?? 0,
+            team2Books: this.books.team2 ?? 0,
             moonshot: teamKey,
             blindNilPlayers: [...this.blindNilPlayers],
           };
@@ -229,32 +249,50 @@ export class GameState {
       this.scores,
       this.books,
       this.settings,
-      this.blindNilPlayers
+      this.blindNilPlayers,
+      this.mode,
+      this.teamLookup
     );
 
-    // Update totals
-    this.scores.team1 = roundResult.team1.newTotal;
-    this.scores.team2 = roundResult.team2.newTotal;
-    this.books.team1 = roundResult.team1.books;
-    this.books.team2 = roundResult.team2.books;
+    // Update totals dynamically for all teams
+    for (const teamKey of teamKeys) {
+      if (roundResult[teamKey]) {
+        this.scores[teamKey] = roundResult[teamKey].newTotal;
+        this.books[teamKey] = roundResult[teamKey].books;
+      }
+    }
 
-    // Build round summary
+    // Build round summary with dynamic team fields
+    const teamScores = {};
+    const teamTotals = {};
+    const teamBooks = {};
+    for (const teamKey of teamKeys) {
+      teamScores[teamKey] = roundResult[teamKey]?.roundScore ?? 0;
+      teamTotals[teamKey] = this.scores[teamKey] ?? 0;
+      teamBooks[teamKey] = this.books[teamKey] ?? 0;
+    }
+
     const roundSummary = {
       roundNumber: this.roundNumber,
       bids: { ...this.bids },
       tricksTaken: { ...this.tricksTaken },
-      team1Score: roundResult.team1.roundScore,
-      team2Score: roundResult.team2.roundScore,
-      team1Total: this.scores.team1,
-      team2Total: this.scores.team2,
-      team1Books: this.books.team1,
-      team2Books: this.books.team2,
+      // Dynamic N-team fields
+      teamScores,
+      teamTotals,
+      teamBooks,
+      // Backward-compat flat fields
+      team1Score: teamScores.team1 ?? 0,
+      team2Score: teamScores.team2 ?? 0,
+      team1Total: this.scores.team1 ?? 0,
+      team2Total: this.scores.team2 ?? 0,
+      team1Books: this.books.team1 ?? 0,
+      team2Books: this.books.team2 ?? 0,
       blindNilPlayers: [...this.blindNilPlayers],
     };
     this.roundHistory.push(roundSummary);
 
     // Check winner
-    const winner = checkWinner(this.scores, this.settings.winTarget);
+    const winner = checkWinner(this.scores, this.settings.winTarget, this.mode);
     if (winner) {
       this.phase = 'gameOver';
       return {
@@ -269,7 +307,7 @@ export class GameState {
     }
 
     // Rotate dealer and start new round
-    this.dealerIndex = (this.dealerIndex + 1) % 4;
+    this.dealerIndex = (this.dealerIndex + 1) % this.playerCount;
 
     return {
       trickComplete: true,
@@ -317,12 +355,14 @@ export class GameState {
       this.blindNilPlayers.delete(oldId);
       this.blindNilPlayers.add(newId);
     }
+
+    // Rebuild team lookup after player swap
+    this.teamLookup = buildTeamLookup(this.mode, this.players);
+
     return true;
   }
 
   getStateForPlayer(playerId) {
-    // Re-sort hand for this specific player's preferences (hand may have been
-    // initially sorted with their prefs, but this ensures correctness after mid-round changes)
     const hand = this.hands[playerId] || [];
     return {
       phase: this.phase,
@@ -340,6 +380,16 @@ export class GameState {
       players: this.players.map(p => ({ id: p.id, name: p.name, team: p.team, seatIndex: p.seatIndex, isBot: p.isBot || false })),
       gameSettings: this.settings,
       blindNilPlayers: [...this.blindNilPlayers],
+      playerCount: this.playerCount,
+      mode: {
+        playerCount: this.mode.playerCount,
+        teamCount: this.mode.teamCount,
+        cardsPerPlayer: this.mode.cardsPerPlayer,
+        tricksPerRound: this.mode.tricksPerRound,
+        hasSpoiler: this.mode.hasSpoiler,
+        seatingPattern: this.mode.seatingPattern,
+        teams: this.mode.teams,
+      },
     };
   }
 }

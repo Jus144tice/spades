@@ -1,33 +1,39 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext.jsx';
+import { getTricksPerRound } from '../modes.js';
 
 export default function Scoreboard() {
   const { state } = useGame();
   const [showHistory, setShowHistory] = useState(false);
 
-  const team1Players = state.players.filter(p => p.team === 1);
-  const team2Players = state.players.filter(p => p.team === 2);
-  const team1Names = team1Players.map(p => p.name).join(' & ');
-  const team2Names = team2Players.map(p => p.name).join(' & ');
+  const playerCount = state.playerCount || state.players.length || 4;
+  const tricksPerRound = getTricksPerRound(state.mode);
 
-  const allBidsIn = Object.keys(state.bids).length === 4;
+  // Build dynamic teams array
+  const teamNums = [...new Set(state.players.map(p => p.team))].sort((a, b) => a - b);
+  const teams = teamNums.map(teamNum => {
+    const teamKey = 'team' + teamNum;
+    const teamPlayers = state.players.filter(p => p.team === teamNum);
+    const names = teamPlayers.map(p => p.name).join(' & ');
+    return { teamNum, teamKey, teamPlayers, names };
+  });
 
-  // Team bid totals
-  const team1Bid = allBidsIn
-    ? team1Players.reduce((sum, p) => sum + (state.bids[p.id] || 0), 0)
-    : null;
-  const team2Bid = allBidsIn
-    ? team2Players.reduce((sum, p) => sum + (state.bids[p.id] || 0), 0)
-    : null;
+  const allBidsIn = Object.keys(state.bids).length === playerCount;
 
-  // Team tricks taken
-  const team1Tricks = team1Players.reduce((sum, p) => sum + (state.tricksTaken[p.id] || 0), 0);
-  const team2Tricks = team2Players.reduce((sum, p) => sum + (state.tricksTaken[p.id] || 0), 0);
+  // Per-team bid and trick totals
+  const teamStats = teams.map(t => {
+    const bid = allBidsIn
+      ? t.teamPlayers.reduce((sum, p) => sum + (state.bids[p.id] || 0), 0)
+      : null;
+    const tricks = t.teamPlayers.reduce((sum, p) => sum + (state.tricksTaken[p.id] || 0), 0);
+    return { ...t, bid, tricks };
+  });
 
   // Books remaining (free tricks)
-  const totalBid = allBidsIn ? team1Bid + team2Bid : null;
-  const booksRemaining = allBidsIn ? 13 - totalBid : null;
-  const tricksLeft = allBidsIn ? 13 - team1Tricks - team2Tricks : null;
+  const totalBid = allBidsIn ? teamStats.reduce((s, t) => s + t.bid, 0) : null;
+  const totalTricks = allBidsIn ? teamStats.reduce((s, t) => s + t.tricks, 0) : null;
+  const booksRemaining = allBidsIn ? tricksPerRound - totalBid : null;
+  const tricksLeft = allBidsIn ? tricksPerRound - totalTricks : null;
 
   // Books mood
   let booksMood = '';
@@ -39,16 +45,19 @@ export default function Scoreboard() {
 
   return (
     <div className="scoreboard">
-      <div className="score-team">
-        <div className="score-team-name">{team1Names}</div>
-        <div className="score-value">{state.scores.team1}</div>
-        <div className="score-books">{state.books.team1} books</div>
-        {allBidsIn && (
-          <div className="score-bid-tracker">
-            Bid {team1Bid} &middot; Took {team1Tricks}/{team1Bid}
-          </div>
-        )}
-      </div>
+      {teamStats.length > 0 && (
+        <div className="score-team">
+          <div className="score-team-name">{teamStats[0].names}</div>
+          <div className="score-value">{state.scores[teamStats[0].teamKey] ?? 0}</div>
+          <div className="score-books">{state.books[teamStats[0].teamKey] ?? 0} books</div>
+          {allBidsIn && (
+            <div className="score-bid-tracker">
+              Bid {teamStats[0].bid} &middot; Took {teamStats[0].tricks}/{teamStats[0].bid}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="score-center">
         <div className="round-label">Round {state.roundNumber}</div>
         {allBidsIn && (
@@ -59,9 +68,20 @@ export default function Scoreboard() {
             </span>
           </div>
         )}
-        {allBidsIn && tricksLeft !== null && tricksLeft < 13 && (
+        {allBidsIn && tricksLeft !== null && tricksLeft < tricksPerRound && (
           <div className="score-remaining">
             {tricksLeft} tricks left
+          </div>
+        )}
+        {/* Extra teams (3+) shown as compact rows in center */}
+        {teamStats.length > 2 && (
+          <div className="score-extra-teams">
+            {teamStats.slice(2).map(t => (
+              <div key={t.teamKey} className="score-extra-team">
+                <span className="score-extra-name">{t.names}</span>
+                <span className="score-extra-value">{state.scores[t.teamKey] ?? 0}</span>
+              </div>
+            ))}
           </div>
         )}
         {state.roundHistory.length > 0 && (
@@ -70,16 +90,19 @@ export default function Scoreboard() {
           </button>
         )}
       </div>
-      <div className="score-team">
-        <div className="score-team-name">{team2Names}</div>
-        <div className="score-value">{state.scores.team2}</div>
-        <div className="score-books">{state.books.team2} books</div>
-        {allBidsIn && (
-          <div className="score-bid-tracker">
-            Bid {team2Bid} &middot; Took {team2Tricks}/{team2Bid}
-          </div>
-        )}
-      </div>
+
+      {teamStats.length > 1 && (
+        <div className="score-team">
+          <div className="score-team-name">{teamStats[1].names}</div>
+          <div className="score-value">{state.scores[teamStats[1].teamKey] ?? 0}</div>
+          <div className="score-books">{state.books[teamStats[1].teamKey] ?? 0} books</div>
+          {allBidsIn && (
+            <div className="score-bid-tracker">
+              Bid {teamStats[1].bid} &middot; Took {teamStats[1].tricks}/{teamStats[1].bid}
+            </div>
+          )}
+        </div>
+      )}
 
       {showHistory && (
         <div className="score-history-overlay" onClick={() => setShowHistory(false)}>
@@ -89,16 +112,24 @@ export default function Scoreboard() {
               <thead>
                 <tr>
                   <th>Round</th>
-                  <th>{team1Names}</th>
-                  <th>{team2Names}</th>
+                  {teamStats.map(t => (
+                    <th key={t.teamKey}>{t.names}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {state.roundHistory.map((r, i) => (
                   <tr key={i}>
                     <td>{r.roundNumber}</td>
-                    <td>{r.team1Score > 0 ? '+' : ''}{r.team1Score} ({r.team1Total})</td>
-                    <td>{r.team2Score > 0 ? '+' : ''}{r.team2Score} ({r.team2Total})</td>
+                    {teamStats.map(t => {
+                      const score = r.teamScores?.[t.teamKey] ?? r[`${t.teamKey.replace('team', 'team')}Score`] ?? 0;
+                      const total = r.teamTotals?.[t.teamKey] ?? r[`${t.teamKey.replace('team', 'team')}Total`] ?? 0;
+                      return (
+                        <td key={t.teamKey}>
+                          {score > 0 ? '+' : ''}{score === 'MOONSHOT' ? 'MOONSHOT' : score} ({total})
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

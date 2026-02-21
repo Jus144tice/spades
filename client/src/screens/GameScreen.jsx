@@ -8,6 +8,7 @@ import BidPanel from '../components/BidPanel.jsx';
 import GameOverModal from '../components/GameOverModal.jsx';
 import RoundSummaryModal from '../components/RoundSummaryModal.jsx';
 import PlayerSeat from '../components/PlayerSeat.jsx';
+import { getTricksPerRound, getSeatPosition } from '../modes.js';
 
 export default function GameScreen() {
   const { state } = useGame();
@@ -17,20 +18,18 @@ export default function GameScreen() {
   queuedCardRef.current = queuedCard;
 
   const isSpectator = state.isSpectator;
+  const playerCount = state.playerCount || state.players.length || 4;
+  const tricksPerRound = getTricksPerRound(state.mode);
 
   // For spectators: fixed layout (player 0=bottom, 1=left, 2=top, 3=right)
   // For players: relative to current player (me at bottom)
   const myIndex = isSpectator ? 0 : state.players.findIndex(p => p.id === state.playerId);
   const getRelativePlayer = (offset) => {
-    const idx = (myIndex + offset) % 4;
+    const idx = (myIndex + offset) % playerCount;
     return state.players[idx];
   };
 
-  const partner = getRelativePlayer(2); // across / top
-  const leftOpp = getRelativePlayer(1); // left
-  const rightOpp = getRelativePlayer(3); // right
   const me = isSpectator ? null : state.players[myIndex];
-
   const isMyTurn = !isSpectator && state.currentTurnId === state.playerId;
   const canQueue = !isSpectator && state.phase === 'playing' && !isMyTurn && state.currentTrick.length >= 1 && !state.trickWonPending;
   const showBacks = !isSpectator && state.gameSettings?.blindNil && !state.cardsRevealed && state.phase === 'bidding';
@@ -41,6 +40,21 @@ export default function GameScreen() {
     return state.vacantSeats.some(v => v.seatIndex === player.seatIndex);
   };
 
+  // Build common seat props for a player
+  const seatProps = (player, extraProps = {}) => ({
+    player,
+    bid: state.bids[player?.id],
+    tricks: state.tricksTaken[player?.id],
+    isCurrentTurn: state.currentTurnId === player?.id,
+    isDealer: state.players.indexOf(player) === state.dealerIndex,
+    isLastTrickWinner: state.lastTrickWinner === player?.id,
+    turnTimer: state.turnTimer,
+    isAfk: !!state.afkPlayers[player?.id],
+    isBlindNil: state.blindNilPlayers?.includes(player?.id),
+    isVacant: isSeatVacant(player),
+    ...extraProps,
+  });
+
   const handlePlayCard = (card) => {
     if (!isMyTurn || state.phase !== 'playing') return;
     socket.emit('play_card', { card });
@@ -48,7 +62,7 @@ export default function GameScreen() {
 
   const handleQueueCard = (card) => {
     setQueuedCard(prev => {
-      if (prev && prev.suit === card.suit && prev.rank === card.rank) return null;
+      if (prev && prev.suit === card.suit && prev.rank === card.rank && !!prev.mega === !!card.mega) return null;
       return card;
     });
   };
@@ -57,7 +71,7 @@ export default function GameScreen() {
   useEffect(() => {
     if (!isMyTurn || !queuedCard || state.trickWonPending || state.phase !== 'playing') return;
     // Verify card is still in hand
-    const stillInHand = state.hand.some(c => c.suit === queuedCard.suit && c.rank === queuedCard.rank);
+    const stillInHand = state.hand.some(c => c.suit === queuedCard.suit && c.rank === queuedCard.rank && !!c.mega === !!queuedCard.mega);
     if (!stillInHand) {
       setQueuedCard(null);
       return;
@@ -73,41 +87,22 @@ export default function GameScreen() {
     }
   }, [state.trickWonPending, state.currentTrick.length, state.phase]);
 
-  return (
-    <div className="game-screen">
-      <Scoreboard />
+  // --- 4-player layout (classic grid) ---
+  const renderFourPlayerLayout = () => {
+    const partner = getRelativePlayer(2);
+    const leftOpp = getRelativePlayer(1);
+    const rightOpp = getRelativePlayer(3);
 
+    return (
       <div className="game-table">
         {/* Partner (top) */}
         <div className="seat seat-top">
-          <PlayerSeat
-            player={partner}
-            bid={state.bids[partner?.id]}
-            tricks={state.tricksTaken[partner?.id]}
-            isCurrentTurn={state.currentTurnId === partner?.id}
-            isDealer={state.players.indexOf(partner) === state.dealerIndex}
-            isLastTrickWinner={state.lastTrickWinner === partner?.id}
-            turnTimer={state.turnTimer}
-            isAfk={!!state.afkPlayers[partner?.id]}
-            isBlindNil={state.blindNilPlayers?.includes(partner?.id)}
-            isVacant={isSeatVacant(partner)}
-          />
+          <PlayerSeat {...seatProps(partner)} />
         </div>
 
         {/* Left opponent */}
         <div className="seat seat-left">
-          <PlayerSeat
-            player={leftOpp}
-            bid={state.bids[leftOpp?.id]}
-            tricks={state.tricksTaken[leftOpp?.id]}
-            isCurrentTurn={state.currentTurnId === leftOpp?.id}
-            isDealer={state.players.indexOf(leftOpp) === state.dealerIndex}
-            isLastTrickWinner={state.lastTrickWinner === leftOpp?.id}
-            turnTimer={state.turnTimer}
-            isAfk={!!state.afkPlayers[leftOpp?.id]}
-            isBlindNil={state.blindNilPlayers?.includes(leftOpp?.id)}
-            isVacant={isSeatVacant(leftOpp)}
-          />
+          <PlayerSeat {...seatProps(leftOpp)} />
         </div>
 
         {/* Trick area (center) */}
@@ -115,56 +110,77 @@ export default function GameScreen() {
           currentTrick={state.currentTrick}
           players={state.players}
           myIndex={myIndex}
+          playerCount={playerCount}
           lastTrickWinner={state.lastTrickWinner}
         />
 
         {/* Right opponent */}
         <div className="seat seat-right">
-          <PlayerSeat
-            player={rightOpp}
-            bid={state.bids[rightOpp?.id]}
-            tricks={state.tricksTaken[rightOpp?.id]}
-            isCurrentTurn={state.currentTurnId === rightOpp?.id}
-            isDealer={state.players.indexOf(rightOpp) === state.dealerIndex}
-            isLastTrickWinner={state.lastTrickWinner === rightOpp?.id}
-            turnTimer={state.turnTimer}
-            isAfk={!!state.afkPlayers[rightOpp?.id]}
-            isBlindNil={state.blindNilPlayers?.includes(rightOpp?.id)}
-            isVacant={isSeatVacant(rightOpp)}
-          />
+          <PlayerSeat {...seatProps(rightOpp)} />
         </div>
 
         {/* Bottom seat */}
         <div className="seat seat-bottom">
           {isSpectator ? (
-            <PlayerSeat
-              player={getRelativePlayer(0)}
-              bid={state.bids[getRelativePlayer(0)?.id]}
-              tricks={state.tricksTaken[getRelativePlayer(0)?.id]}
-              isCurrentTurn={state.currentTurnId === getRelativePlayer(0)?.id}
-              isDealer={0 === state.dealerIndex}
-              isLastTrickWinner={state.lastTrickWinner === getRelativePlayer(0)?.id}
-              turnTimer={state.turnTimer}
-              isAfk={!!state.afkPlayers[getRelativePlayer(0)?.id]}
-              isBlindNil={state.blindNilPlayers?.includes(getRelativePlayer(0)?.id)}
-              isVacant={isSeatVacant(getRelativePlayer(0))}
-            />
+            <PlayerSeat {...seatProps(getRelativePlayer(0))} />
           ) : (
-            <PlayerSeat
-              player={me}
-              bid={state.bids[me?.id]}
-              tricks={state.tricksTaken[me?.id]}
-              isCurrentTurn={isMyTurn}
-              isDealer={myIndex === state.dealerIndex}
-              isMe
-              isLastTrickWinner={state.lastTrickWinner === me?.id}
-              turnTimer={state.turnTimer}
-              isAfk={!!state.afkPlayers[me?.id]}
-              isBlindNil={state.blindNilPlayers?.includes(me?.id)}
-            />
+            <PlayerSeat {...seatProps(me, { isMe: true, isCurrentTurn: isMyTurn, isDealer: myIndex === state.dealerIndex })} />
           )}
         </div>
       </div>
+    );
+  };
+
+  // --- N-player layout (polygon) ---
+  const renderPolygonLayout = () => {
+    // Build array of all other players (offsets 1 to playerCount-1)
+    const otherPlayers = [];
+    for (let offset = 1; offset < playerCount; offset++) {
+      otherPlayers.push({ offset, player: getRelativePlayer(offset) });
+    }
+
+    return (
+      <div className="game-table game-table-polygon">
+        {/* Other players around the table */}
+        {otherPlayers.map(({ offset, player }) => {
+          const pos = getSeatPosition(offset, playerCount);
+          return (
+            <div
+              key={offset}
+              className="seat seat-polygon"
+              style={{ position: 'absolute', left: pos.left, top: pos.top, transform: 'translate(-50%, -50%)' }}
+            >
+              <PlayerSeat {...seatProps(player)} />
+            </div>
+          );
+        })}
+
+        {/* Trick area (center) */}
+        <TrickArea
+          currentTrick={state.currentTrick}
+          players={state.players}
+          myIndex={myIndex}
+          playerCount={playerCount}
+          lastTrickWinner={state.lastTrickWinner}
+        />
+
+        {/* Bottom seat (me) */}
+        <div className="seat seat-bottom-polygon">
+          {isSpectator ? (
+            <PlayerSeat {...seatProps(getRelativePlayer(0))} />
+          ) : (
+            <PlayerSeat {...seatProps(me, { isMe: true, isCurrentTurn: isMyTurn, isDealer: myIndex === state.dealerIndex })} />
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="game-screen">
+      <Scoreboard />
+
+      {playerCount === 4 ? renderFourPlayerLayout() : renderPolygonLayout()}
 
       {/* Bidding panel — players only */}
       {!isSpectator && state.phase === 'bidding' && isMyTurn && <BidPanel />}
@@ -175,7 +191,7 @@ export default function GameScreen() {
             <div className="bid-summary">
               <span className="bid-summary-item">Total bid: <strong>{Object.values(state.bids).reduce((s, b) => s + b, 0)}</strong></span>
               <span className="bid-summary-divider">|</span>
-              <span className="bid-summary-item">Remaining: <strong>{13 - Object.values(state.bids).reduce((s, b) => s + b, 0)}</strong></span>
+              <span className="bid-summary-item">Remaining: <strong>{tricksPerRound - Object.values(state.bids).reduce((s, b) => s + b, 0)}</strong></span>
             </div>
           )}
         </div>

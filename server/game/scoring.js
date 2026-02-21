@@ -6,20 +6,26 @@ import {
   TEN_TRICK_BONUS,
   WINNING_SCORE,
 } from './constants.js';
+import { getTeamKeys } from './modeHelpers.js';
 
-export function scoreRound(players, bids, tricksTaken, currentScores, currentBooks, settings = {}, blindNilPlayers = new Set()) {
-  // players is the ordered array; teams: 0+2 = team1, 1+3 = team2
-  const teams = {
-    team1: [players[0].id, players[2].id],
-    team2: [players[1].id, players[3].id],
-  };
+export function scoreRound(players, bids, tricksTaken, currentScores, currentBooks, settings = {}, blindNilPlayers = new Set(), mode, teamLookup) {
+  // Determine teams: use teamLookup if provided, otherwise fallback to classic 4-player
+  let teamsByKey;
+  if (teamLookup) {
+    teamsByKey = teamLookup.teamsByKey;
+  } else {
+    teamsByKey = {
+      team1: [players[0].id, players[2].id],
+      team2: [players[1].id, players[3].id],
+    };
+  }
 
   const bagThreshold = settings.bagThreshold || BOOK_PENALTY_THRESHOLD;
   const result = {};
 
-  for (const [teamKey, playerIds] of Object.entries(teams)) {
+  for (const [teamKey, playerIds] of Object.entries(teamsByKey)) {
     let roundScore = 0;
-    let books = currentBooks[teamKey];
+    let books = currentBooks[teamKey] || 0;
 
     const nilPlayers = playerIds.filter(id => bids[id] === 0);
     const nonNilPlayers = playerIds.filter(id => bids[id] > 0);
@@ -53,7 +59,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
         roundScore -= combinedBid * 10;
       }
     } else if (combinedBid === 0 && failedNilTricks > 0) {
-      // Both players bid nil and at least one failed - those tricks are books
+      // All players on team bid nil and at least one failed - those tricks are books
       books += failedNilTricks;
     }
 
@@ -74,7 +80,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
 
     result[teamKey] = {
       roundScore,
-      newTotal: currentScores[teamKey] + roundScore,
+      newTotal: (currentScores[teamKey] || 0) + roundScore,
       books,
     };
   }
@@ -82,16 +88,18 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
   return result;
 }
 
-export function checkWinner(scores, winTarget) {
+export function checkWinner(scores, winTarget, mode) {
   const target = winTarget || WINNING_SCORE;
-  const t1 = scores.team1 >= target;
-  const t2 = scores.team2 >= target;
 
-  if (t1 && t2) {
-    if (scores.team1 === scores.team2) return null; // tie - play another round
-    return scores.team1 > scores.team2 ? 'team1' : 'team2';
-  }
-  if (t1) return 'team1';
-  if (t2) return 'team2';
-  return null;
+  // Collect all teams that have reached the target
+  const teamKeys = mode ? getTeamKeys(mode) : Object.keys(scores);
+  const qualifiers = teamKeys.filter(tk => (scores[tk] || 0) >= target);
+
+  if (qualifiers.length === 0) return null;
+  if (qualifiers.length === 1) return qualifiers[0];
+
+  // Multiple teams above target — highest score wins; tie = play another round
+  qualifiers.sort((a, b) => (scores[b] || 0) - (scores[a] || 0));
+  if (scores[qualifiers[0]] === scores[qualifiers[1]]) return null;
+  return qualifiers[0];
 }

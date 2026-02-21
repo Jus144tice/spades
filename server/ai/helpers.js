@@ -1,4 +1,4 @@
-import { RANK_VALUE } from '../game/constants.js';
+import { getCardValue } from '../game/constants.js';
 
 export function groupBySuit(cards) {
   const groups = {};
@@ -7,20 +7,20 @@ export function groupBySuit(cards) {
     groups[c.suit].push(c);
   }
   for (const suit of Object.keys(groups)) {
-    groups[suit].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+    groups[suit].sort((a, b) => getCardValue(b) - getCardValue(a));
   }
   return groups;
 }
 
 export function pickHighest(cards) {
   return cards.reduce((best, c) =>
-    RANK_VALUE[c.rank] > RANK_VALUE[best.rank] ? c : best
+    getCardValue(c) > getCardValue(best) ? c : best
   );
 }
 
 export function pickLowest(cards) {
   return cards.reduce((best, c) =>
-    RANK_VALUE[c.rank] < RANK_VALUE[best.rank] ? c : best
+    getCardValue(c) < getCardValue(best) ? c : best
   );
 }
 
@@ -32,7 +32,7 @@ export function pickRandom(cards) {
 // Middle cards are the least useful: can't reliably win or duck.
 export function pickMiddleCard(cards) {
   if (cards.length <= 2) return null;
-  const sorted = [...cards].sort((a, b) => RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
+  const sorted = [...cards].sort((a, b) => getCardValue(a) - getCardValue(b));
   return sorted[Math.floor(sorted.length / 2)];
 }
 
@@ -79,9 +79,9 @@ export function getCurrentWinner(trick) {
     if (cIsSpade && !wIsSpade) {
       winner = play;
     } else if (cIsSpade && wIsSpade) {
-      if (RANK_VALUE[play.card.rank] > RANK_VALUE[winner.card.rank]) winner = play;
+      if (getCardValue(play.card) > getCardValue(winner.card)) winner = play;
     } else if (play.card.suit === ledSuit && winner.card.suit === ledSuit) {
-      if (RANK_VALUE[play.card.rank] > RANK_VALUE[winner.card.rank]) winner = play;
+      if (getCardValue(play.card) > getCardValue(winner.card)) winner = play;
     }
   }
 
@@ -89,7 +89,7 @@ export function getCurrentWinner(trick) {
 }
 
 export function getEffectiveValue(card, ledSuit) {
-  if (card.suit === 'S' && ledSuit !== 'S') return 100 + RANK_VALUE[card.rank];
-  if (card.suit === ledSuit) return RANK_VALUE[card.rank];
+  if (card.suit === 'S' && ledSuit !== 'S') return 100 + getCardValue(card);
+  if (card.suit === ledSuit) return getCardValue(card);
   return 0;
 }

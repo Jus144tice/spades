@@ -3,19 +3,24 @@
  * Stats are updated incrementally inside the saveGameResults transaction.
  */
 
+import { teamKeyToNum, teamNumToKey } from '../game/modeHelpers.js';
+
 export async function updatePlayerStats(client, game, winningTeam) {
-  const winTeamNum = winningTeam === 'team1' ? 1 : 2;
+  const winTeamNum = teamKeyToNum(winningTeam);
+  const teamLookup = game.teamLookup;
 
   for (const player of game.players) {
     // Only track stats for human players with accounts
     if (player.isBot || !player.userId) continue;
 
     const isWinner = player.team === winTeamNum;
-    const teamKey = player.team === 1 ? 'team1' : 'team2';
+    const teamKey = teamNumToKey(player.team);
 
-    // Find partner (seat +2 mod 4)
-    const partnerIndex = (player.seatIndex + 2) % 4;
-    const partner = game.players[partnerIndex];
+    // Find teammates using teamLookup (supports N-player modes)
+    const partnerIds = teamLookup
+      ? teamLookup.getPartnerIds(player.id)
+      : [game.players[(player.seatIndex + 2) % 4]?.id].filter(Boolean);
+    const partners = partnerIds.map(pid => game.players.find(p => p.id === pid)).filter(Boolean);
 
     let roundsPlayed = 0;
     let perfectBids = 0;
@@ -62,17 +67,23 @@ export async function updatePlayerStats(client, game, winningTeam) {
 
       // Set detection (mirrors scoring.js logic)
       // Only count if not a moonshot round
-      if (!round.moonshot && partner) {
-        const partnerBid = round.bids[partner.id];
-        const partnerTricks = round.tricksTaken[partner.id] || 0;
+      if (!round.moonshot && partners.length > 0) {
+        // Build team bids array for this player + all teammates
+        const teamBids = [
+          { id: player.id, bid, tricks, isNil: bid === 0 },
+        ];
+        let allPartnersPresent = true;
+        for (const p of partners) {
+          const pBid = round.bids[p.id];
+          if (pBid === undefined) { allPartnersPresent = false; break; }
+          teamBids.push({
+            id: p.id, bid: pBid,
+            tricks: round.tricksTaken[p.id] || 0,
+            isNil: pBid === 0,
+          });
+        }
 
-        if (partnerBid !== undefined) {
-          // Identify nil vs non-nil for team
-          const teamBids = [
-            { id: player.id, bid, tricks, isNil: bid === 0 },
-            { id: partner.id, bid: partnerBid, tricks: partnerTricks, isNil: partnerBid === 0 },
-          ];
-
+        if (allPartnersPresent) {
           const nonNilBids = teamBids.filter(b => !b.isNil);
           const nilBids = teamBids.filter(b => b.isNil);
           const combinedBid = nonNilBids.reduce((sum, b) => sum + b.bid, 0);

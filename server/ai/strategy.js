@@ -1,4 +1,4 @@
-import { RANK_VALUE } from '../game/constants.js';
+import { RANK_VALUE, getCardValue } from '../game/constants.js';
 import { pickHighest, pickLowest, pickMiddleCard, getEffectiveValue } from './helpers.js';
 import { countGuaranteedWinners, isMasterCard } from './memory.js';
 
@@ -9,7 +9,8 @@ import { countGuaranteedWinners, isMasterCard } from './memory.js';
 
 export function calculateDisposition(hand, ctx) {
   const totalBids = ctx.teamBid + ctx.oppBid;
-  const freeTricks = 13 - totalBids; // "free" tricks nobody bid on
+  const tricksPerRound = ctx.players ? ctx.players.length : 13; // each player = 1 trick per round in standard play
+  const freeTricks = tricksPerRound - totalBids; // "free" tricks nobody bid on
 
   // Base disposition from free tricks
   // <=2 free: lean SET, >=4 free: lean DUCK, 3: neutral
@@ -58,8 +59,9 @@ export function calculateDisposition(hand, ctx) {
 
 // Guess whether opponents are in SET mode or DUCK mode (avoiding books)
 export function estimateOpponentDisposition(currentTrick, ctx) {
+  const tricksPerRound = ctx.players ? ctx.players.length : 13;
   const totalBids = ctx.teamBid + ctx.oppBid;
-  const freeTricks = 13 - totalBids;
+  const freeTricks = tricksPerRound - totalBids;
 
   let oppDisp = 0;
   if (freeTricks <= 1) oppDisp = 2;
@@ -80,7 +82,7 @@ export function estimateOpponentDisposition(currentTrick, ctx) {
   }
 
   const totalTricksPlayed = ctx.teamTricks + ctx.oppTricks;
-  const tricksLeft = 13 - totalTricksPlayed;
+  const tricksLeft = tricksPerRound - totalTricksPlayed;
   if (ctx.oppTricks >= ctx.oppBid && tricksLeft >= 4) {
     oppDisp += 1;
   }
@@ -118,9 +120,10 @@ function readPartnerSignals(ctx) {
 
   const completedTricks = [];
   const rawPlayed = ctx.rawCardsPlayed || [];
-  for (let i = 0; i < rawPlayed.length; i += 4) {
-    if (i + 3 < rawPlayed.length) {
-      completedTricks.push(rawPlayed.slice(i, i + 4));
+  const playerCount = ctx.players ? ctx.players.length : 4;
+  for (let i = 0; i < rawPlayed.length; i += playerCount) {
+    if (i + playerCount - 1 < rawPlayed.length) {
+      completedTricks.push(rawPlayed.slice(i, i + playerCount));
     }
   }
 
@@ -170,7 +173,7 @@ function readPartnerSignals(ctx) {
 // High card = "I have strength, consider set mode"
 // Low card = "I'm ducking, avoid books"
 export function signalWithFollow(cardsOfSuit, winningValue, ctx) {
-  const underCards = cardsOfSuit.filter(c => RANK_VALUE[c.rank] < winningValue);
+  const underCards = cardsOfSuit.filter(c => getCardValue(c) < winningValue);
   const playableCards = underCards.length > 0 ? underCards : cardsOfSuit;
 
   if (playableCards.length <= 1) return playableCards[0] || cardsOfSuit[0];

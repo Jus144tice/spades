@@ -5,7 +5,7 @@
  * card memory in ai/memory.js, utilities in ai/helpers.js.
  */
 
-import { RANK_VALUE } from './game/constants.js';
+import { RANK_VALUE, getCardValue } from './game/constants.js';
 import {
   groupBySuit, pickHighest, pickLowest, pickRandom, pickMiddleCard,
   pickTopFromShortestSuit, getValidLeads, getCurrentWinner, getEffectiveValue,
@@ -19,35 +19,37 @@ export { botBid, evaluateBlindNil } from './ai/bidding.js';
 // --- CARD PLAY ---
 
 export function botPlayCard(hand, gameState, botId) {
-  const { currentTrick, bids, tricksTaken, players, spadesBroken } = gameState;
+  const { currentTrick, bids, tricksTaken, players, spadesBroken, teamLookup, mode } = gameState;
   const botIndex = players.findIndex(p => p.id === botId);
-  const partnerIndex = (botIndex + 2) % 4;
-  const partnerId = players[partnerIndex].id;
-  const partnerBid = bids[partnerId];
+
+  // Use teamLookup for dynamic partner/opponent finding
+  const partnerIds = teamLookup ? teamLookup.getPartnerIds(botId) : [];
+  const opponentIds = teamLookup ? teamLookup.getOpponentIds(botId) : [];
+  const partnerId = partnerIds[0] || null;
+  const partnerBid = partnerId ? bids[partnerId] : undefined;
   const botBidVal = bids[botId];
   const botTricks = tricksTaken[botId] || 0;
-  const partnerTricks = tricksTaken[partnerId] || 0;
+  const partnerTricks = partnerIds.reduce((sum, id) => sum + (tricksTaken[id] || 0), 0);
 
-  const opp1Index = (botIndex + 1) % 4;
-  const opp2Index = (botIndex + 3) % 4;
-  const opp1Id = players[opp1Index].id;
-  const opp2Id = players[opp2Index].id;
-  const opp1Bid = bids[opp1Id];
-  const opp2Bid = bids[opp2Id];
+  // Opponent IDs — use first two for backward compat with nil-bust logic
+  const opp1Id = opponentIds[0] || null;
+  const opp2Id = opponentIds[1] || null;
+  const opp1Bid = opp1Id ? bids[opp1Id] : 0;
+  const opp2Bid = opp2Id ? bids[opp2Id] : 0;
 
-  const teamBid = (botBidVal || 0) + (partnerBid === 0 ? 0 : partnerBid || 0);
+  const teamBid = (botBidVal || 0) + partnerIds.reduce((sum, id) => sum + (bids[id] === 0 ? 0 : bids[id] || 0), 0);
   const teamTricks = botTricks + partnerTricks;
   const needMore = teamBid > teamTricks;
   const tricksNeeded = teamBid - teamTricks;
-  const partnerIsNil = partnerBid === 0;
+  const partnerIsNil = partnerId ? partnerBid === 0 : false;
   const botIsNil = botBidVal === 0;
-  const oppBid = (opp1Bid || 0) + (opp2Bid || 0);
-  const oppTricks = (tricksTaken[opp1Id] || 0) + (tricksTaken[opp2Id] || 0);
-  const opp1IsNil = opp1Bid === 0;
-  const opp2IsNil = opp2Bid === 0;
+  const oppBid = opponentIds.reduce((sum, id) => sum + (bids[id] || 0), 0);
+  const oppTricks = opponentIds.reduce((sum, id) => sum + (tricksTaken[id] || 0), 0);
+  const opp1IsNil = opp1Id ? opp1Bid === 0 : false;
+  const opp2IsNil = opp2Id ? opp2Bid === 0 : false;
   const seatPosition = currentTrick.length;
 
-  const memory = buildCardMemory(hand, gameState, botId);
+  const memory = buildCardMemory(hand, gameState, botId, mode);
 
   const ctx = {
     needMore, tricksNeeded, partnerIsNil, botIsNil, spadesBroken,
@@ -127,7 +129,7 @@ function leadAsNil(validCards) {
   for (const [suit, cards] of Object.entries(groups)) {
     const lowest = cards[cards.length - 1];
     if (cards.length > bestLen ||
-        (cards.length === bestLen && RANK_VALUE[lowest.rank] < RANK_VALUE[bestCard.rank])) {
+        (cards.length === bestLen && getCardValue(lowest) < getCardValue(bestCard))) {
       bestCard = lowest;
       bestLen = cards.length;
     }
@@ -636,8 +638,8 @@ function discardWhenPartnerNil(hand, spades, nonSpade, currentTrick, ledSuit, cu
 function trumpBeaters(spades, currentTrick) {
   const currentHighTrump = currentTrick
     .filter(t => t.card.suit === 'S')
-    .reduce((max, t) => Math.max(max, RANK_VALUE[t.card.rank]), 0);
-  const beatingSpades = spades.filter(c => RANK_VALUE[c.rank] > currentHighTrump);
+    .reduce((max, t) => Math.max(max, getCardValue(t.card)), 0);
+  const beatingSpades = spades.filter(c => getCardValue(c) > currentHighTrump);
   if (beatingSpades.length > 0) return pickLowest(beatingSpades);
   if (currentHighTrump === 0 && spades.length > 0) return pickLowest(spades);
   return null;

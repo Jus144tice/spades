@@ -29,8 +29,15 @@ CREATE TABLE IF NOT EXISTS games (
   id SERIAL PRIMARY KEY,
   started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   ended_at TIMESTAMP WITH TIME ZONE,
-  winning_team SMALLINT -- 1 or 2
+  winning_team SMALLINT, -- 1, 2, 3, or 4
+  game_mode SMALLINT DEFAULT 4 -- player count (3-8)
 );
+
+-- Add game_mode column if missing (for existing databases)
+DO $$ BEGIN
+  ALTER TABLE games ADD COLUMN game_mode SMALLINT DEFAULT 4;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 -- Game players (links users to games)
 CREATE TABLE IF NOT EXISTS game_players (
@@ -71,6 +78,18 @@ CREATE TABLE IF NOT EXISTS round_bids (
 );
 CREATE INDEX IF NOT EXISTS idx_round_bids_game ON round_bids(game_id);
 CREATE INDEX IF NOT EXISTS idx_round_bids_user ON round_bids(user_id);
+
+-- Team round scores (normalized, supports N teams)
+CREATE TABLE IF NOT EXISTS team_round_scores (
+  id SERIAL PRIMARY KEY,
+  game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  round_number SMALLINT NOT NULL,
+  team_number SMALLINT NOT NULL,
+  round_score INTEGER NOT NULL,
+  total_score INTEGER NOT NULL,
+  bags SMALLINT DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_team_round_scores_game ON team_round_scores(game_id);
 
 -- One-time migration: clear old game data when player_stats doesn't exist yet
 DO $$ BEGIN

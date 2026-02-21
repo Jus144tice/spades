@@ -32,7 +32,8 @@ export default function GameSettingsPanel() {
     || settings.bagThreshold !== 10
     || settings.blindNil
     || !settings.moonshot
-    || !settings.tenBidBonus;
+    || !settings.tenBidBonus
+    || (settings.gameMode && settings.gameMode !== 4);
 
   return (
     <div className="game-settings-panel">
@@ -47,6 +48,19 @@ export default function GameSettingsPanel() {
       {expanded && (
         <div className="game-settings-body">
           <div className="settings-section">
+            <div className="settings-row">
+              <span className="settings-label">Players</span>
+              {isHost ? (
+                <div className="settings-number">
+                  <button className="settings-step" onClick={() => stepNumber('gameMode', -1, 4, 4)} disabled>-</button>
+                  <span className="settings-value">{settings.gameMode || 4}</span>
+                  <button className="settings-step" onClick={() => stepNumber('gameMode', 1, 4, 4)} disabled>+</button>
+                </div>
+              ) : (
+                <span className="settings-value-readonly">{settings.gameMode || 4}</span>
+              )}
+            </div>
+
             <div className="settings-row">
               <span className="settings-label">Win Target</span>
               {isHost ? (

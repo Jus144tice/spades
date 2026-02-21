@@ -1,4 +1,4 @@
-import { RANK_VALUE } from './constants.js';
+import { getCardValue } from './constants.js';
 
 export function validatePlay(card, hand, currentTrick, spadesBroken) {
   if (currentTrick.length === 0) {
@@ -34,11 +34,11 @@ export function determineTrickWinner(trick) {
     if (challengerIsSpade && !winnerIsSpade) {
       winner = play;
     } else if (challengerIsSpade && winnerIsSpade) {
-      if (RANK_VALUE[play.card.rank] > RANK_VALUE[winner.card.rank]) {
+      if (getCardValue(play.card) > getCardValue(winner.card)) {
         winner = play;
       }
     } else if (play.card.suit === ledSuit && winner.card.suit === ledSuit) {
-      if (RANK_VALUE[play.card.rank] > RANK_VALUE[winner.card.rank]) {
+      if (getCardValue(play.card) > getCardValue(winner.card)) {
         winner = play;
       }
     }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useGame } from '../context/GameContext.jsx';
+import { getCardsPerPlayer } from '../modes.js';
 
 export default function BidPanel() {
   const socket = useSocket();
@@ -9,6 +10,7 @@ export default function BidPanel() {
 
   const settings = state.gameSettings || {};
   const cardsHidden = settings.blindNil && !state.cardsRevealed;
+  const maxBid = getCardsPerPlayer(state.mode);
 
   const handleSubmit = () => {
     if (selectedBid === null) return;
@@ -25,7 +27,7 @@ export default function BidPanel() {
 
   const totalBidSoFar = Object.values(state.bids).reduce((sum, b) => sum + b, 0);
   const bidsPlaced = Object.keys(state.bids).length;
-  const remaining = 13 - totalBidSoFar;
+  const remaining = maxBid - totalBidSoFar;
 
   // When cards are hidden, show blind nil choice instead of full bid grid
   if (cardsHidden) {
@@ -72,7 +74,7 @@ export default function BidPanel() {
         </div>
       )}
       <div className="bid-options">
-        {Array.from({ length: 14 }, (_, i) => (
+        {Array.from({ length: maxBid + 1 }, (_, i) => (
           <button
             key={i}
             className={`bid-btn ${selectedBid === i ? 'selected' : ''} ${i === 0 ? 'nil-btn' : ''}`}

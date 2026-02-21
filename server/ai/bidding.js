@@ -1,4 +1,4 @@
-import { RANK_VALUE } from '../game/constants.js';
+import { RANK_VALUE, getCardValue } from '../game/constants.js';
 
 export function botBid(hand, partnerBid, opponentBids, gameState) {
   const spades = hand.filter(c => c.suit === 'S');
@@ -7,7 +7,7 @@ export function botBid(hand, partnerBid, opponentBids, gameState) {
   const clubs = hand.filter(c => c.suit === 'C');
   const suits = { H: hearts, D: diamonds, C: clubs };
 
-  const sortedSpades = [...spades].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+  const sortedSpades = [...spades].sort((a, b) => getCardValue(b) - getCardValue(a));
 
   // Nil evaluation (do this first)
   if (evaluateNil(hand, sortedSpades, spades, suits, partnerBid)) return 0;
@@ -38,7 +38,7 @@ export function botBid(hand, partnerBid, opponentBids, gameState) {
   // Count off-suit tricks
   for (const [suitKey, suitCards] of Object.entries(suits)) {
     if (suitCards.length === 0) continue;
-    const sorted = [...suitCards].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+    const sorted = [...suitCards].sort((a, b) => getCardValue(b) - getCardValue(a));
     const topVal = RANK_VALUE[sorted[0].rank];
     const len = sorted.length;
 
@@ -95,27 +95,47 @@ export function botBid(hand, partnerBid, opponentBids, gameState) {
  * Only the second bidder on the team should consider blind nil.
  */
 export function evaluateBlindNil(gameState, botId) {
-  const { players, bids, scores, settings, roundNumber } = gameState;
+  const { players, bids, scores, settings, roundNumber, teamLookup } = gameState;
   if (!settings.blindNil) return false;
 
   // Never blind nil in round 1 — no score context
   if (roundNumber <= 1) return false;
 
-  const botIndex = players.findIndex(p => p.id === botId);
-  const partnerIndex = (botIndex + 2) % 4;
-  const partnerId = players[partnerIndex].id;
-  const partnerBid = bids[partnerId];
+  // Use teamLookup if available, fallback to classic 4-player math
+  let partnerId, partnerBid;
+  if (teamLookup) {
+    const partnerIds = teamLookup.getPartnerIds(botId);
+    partnerId = partnerIds[0] || null;
+    partnerBid = partnerId ? bids[partnerId] : undefined;
+  } else {
+    const botIndex = players.findIndex(p => p.id === botId);
+    const partnerIndex = (botIndex + 2) % 4;
+    partnerId = players[partnerIndex].id;
+    partnerBid = bids[partnerId];
+  }
 
   // Only as second bidder on the team (partner must have bid already)
   if (partnerBid === undefined || partnerBid === null) return false;
   if (partnerBid === 0) return false;   // Never if partner bid nil
   if (partnerBid < 4) return false;     // Partner must be able to cover
 
-  const team = players[botIndex].team;
-  const teamKey = team === 1 ? 'team1' : 'team2';
-  const oppKey = team === 1 ? 'team2' : 'team1';
-  const ourScore = scores[teamKey];
-  const oppScore = scores[oppKey];
+  // Find our team's score and the best opponent score
+  let ourScore, oppScore;
+  if (teamLookup) {
+    const teamKey = teamLookup.getTeamKey(botId);
+    ourScore = scores[teamKey] || 0;
+    // Best opponent score (highest among non-teammates)
+    const allTeamKeys = Object.keys(scores);
+    oppScore = allTeamKeys
+      .filter(tk => tk !== teamKey)
+      .reduce((max, tk) => Math.max(max, scores[tk] || 0), 0);
+  } else {
+    const team = players[players.findIndex(p => p.id === botId)].team;
+    const teamKey = 'team' + team;
+    const oppKey = team === 1 ? 'team2' : 'team1';
+    ourScore = scores[teamKey];
+    oppScore = scores[oppKey];
+  }
   const winTarget = settings.winTarget || 500;
 
   const deficit = oppScore - ourScore;
@@ -150,7 +170,7 @@ function evaluateNil(hand, sortedSpades, spades, suits, partnerBid) {
 
   for (const [suitKey, suitCards] of Object.entries(suits)) {
     if (suitCards.length === 0) continue;
-    const sorted = [...suitCards].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+    const sorted = [...suitCards].sort((a, b) => getCardValue(b) - getCardValue(a));
     if (RANK_VALUE[sorted[0].rank] === 14) return false;
     if (RANK_VALUE[sorted[0].rank] === 13 && suitCards.length <= 2) return false;
   }
