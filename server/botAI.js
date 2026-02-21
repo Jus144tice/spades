@@ -79,18 +79,43 @@ export function botPlayCard(hand, gameState, botId) {
   // Guaranteed-to-make detection
   ctx.canGuaranteeBid = false;
   if (needMore && !botIsNil) {
-    if (countGuaranteedWinners(hand, memory) >= tricksNeeded) {
+    const guaranteed = countGuaranteedWinners(hand, memory);
+    if (guaranteed >= tricksNeeded) {
       ctx.canGuaranteeBid = true;
     }
+    ctx.guaranteedWinners = guaranteed;
   }
 
-  // Derived booleans
-  const effectivelyMadeBid = !needMore || ctx.canGuaranteeBid;
+  // Count masters in hand — used to decide if we can spare any for consolidation
+  ctx.mastersInHand = hand.filter(c => isMasterCard(c, memory));
+  ctx.mastersToSpare = Math.max(0, ctx.mastersInHand.length - tricksNeeded);
+
+  // --- THREE PRIORITIES: MAKE > SET > DUCK ---
+  // MAKE: We still need tricks to hit our bid — never sacrifice this
+  // SET:  Bid is secure AND opponents haven't made — try to take their tricks
+  // DUCK: Bid is secure AND can't set opponents — avoid books
+
+  const bidSafelyMade = !needMore; // Actually took enough tricks
+  const effectivelyMadeBid = bidSafelyMade || ctx.canGuaranteeBid;
+
   ctx.setMode = effectivelyMadeBid && ctx.disposition > 0 && oppTricks < oppBid;
   ctx.duckMode = effectivelyMadeBid && ctx.disposition < 0;
 
-  // Count inevitable winners — used for consolidation (dump on partner's tricks to avoid extra books)
-  ctx.inevitableWinners = hand.filter(c => isMasterCard(c, memory));
+  // MAKE PRIORITY OVERRIDE: if we still need tricks, never let duck mode
+  // cause us to get set. Don't dump cards we need for our bid.
+  if (needMore && !bidSafelyMade) {
+    // Track remaining situation
+    const tricksPerRound = mode ? mode.tricksPerRound : 13;
+    const totalTricksPlayed = teamTricks + oppTricks;
+    ctx.tricksRemaining = tricksPerRound - totalTricksPlayed;
+    const oppStillNeeds = Math.max(0, oppBid - oppTricks);
+    ctx.remainingFree = ctx.tricksRemaining - tricksNeeded - oppStillNeeds;
+
+    // If remaining free tricks are tight, making bid is priority over ducking
+    if (ctx.remainingFree <= 2 || !ctx.canGuaranteeBid) {
+      ctx.duckMode = false; // Don't duck when you might get set
+    }
+  }
 
   if (currentTrick.length === 0) {
     return botLead(hand, ctx);
@@ -528,8 +553,8 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
 
       // NEVER overtake partner's boss card — it's already winning, save your high cards
       if (partnerIsMaster || winningValue >= RANK_VALUE['K']) {
-        if (ctx.duckMode && ctx.canGuaranteeBid) {
-          // Consolidation: dump masters on partner's winning trick
+        if (ctx.duckMode && ctx.canGuaranteeBid && ctx.mastersToSpare > 0) {
+          // Consolidation: dump masters on partner's winning trick — but ONLY if we can spare them
           const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
           if (mastersInSuit.length > 0 && cardsOfSuit.length > mastersInSuit.length) {
             return pickHighest(mastersInSuit);
@@ -581,12 +606,14 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
 
   // DUCK MODE: avoid taking tricks (book avoidance)
   if (winnerIsPartner) {
-    // Consolidation: dump masters and high cards on partner's trick
-    const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
-    if (mastersInSuit.length > 0 && cardsOfSuit.length > mastersInSuit.length) {
-      return pickHighest(mastersInSuit);
+    // Consolidation: dump masters on partner's trick — only if we can spare them
+    if (ctx.mastersToSpare > 0) {
+      const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
+      if (mastersInSuit.length > 0 && cardsOfSuit.length > mastersInSuit.length) {
+        return pickHighest(mastersInSuit);
+      }
     }
-    // Even without masters, dump highest card — partner is taking anyway
+    // Dump highest card — partner is taking anyway
     return pickHighest(cardsOfSuit);
   }
   // NOT partner winning — play as low as possible to avoid taking
@@ -618,19 +645,21 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
     }
 
     // Consolidation: dump inevitable winners on partner's trick to avoid extra books
+    // But ONLY dump masters we can spare — never sacrifice cards needed for our bid
     if (ctx.duckMode || (ctx.canGuaranteeBid && ctx.disposition < 0)) {
-      // Dump highest spades first (most dangerous — they'll win future tricks)
-      const masterSpades = spades.filter(c => isMasterCard(c, memory));
-      if (masterSpades.length > 0) return pickHighest(masterSpades);
-      // Dump any high spades (even non-masters can be forced to win later)
-      if (spades.length > 1) {
-        const highSpades = spades.filter(c => RANK_VALUE[c.rank] >= 10);
-        if (highSpades.length > 0) return pickHighest(highSpades);
+      if (ctx.mastersToSpare > 0) {
+        // Dump highest spades first (most dangerous — they'll win future tricks)
+        const masterSpades = spades.filter(c => isMasterCard(c, memory));
+        if (masterSpades.length > 0) return pickHighest(masterSpades);
+        // Dump off-suit masters
+        const masterNonSpade = nonSpade.filter(c => isMasterCard(c, memory));
+        if (masterNonSpade.length > 0) return pickHighest(masterNonSpade);
       }
-      // Dump off-suit masters
-      const masterNonSpade = nonSpade.filter(c => isMasterCard(c, memory));
-      if (masterNonSpade.length > 0) return pickHighest(masterNonSpade);
-      // Dump highest off-suit card
+      // Dump high non-master cards (safe — they won't guarantee us a trick anyway)
+      if (spades.length > 1) {
+        const highNonMasterSpades = spades.filter(c => RANK_VALUE[c.rank] >= 10 && !isMasterCard(c, memory));
+        if (highNonMasterSpades.length > 0) return pickHighest(highNonMasterSpades);
+      }
       if (nonSpade.length > 0) return pickHighest(nonSpade);
     }
 

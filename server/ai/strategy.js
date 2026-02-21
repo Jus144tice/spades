@@ -32,6 +32,31 @@ export function calculateDisposition(hand, ctx) {
     }
   }
 
+  // DYNAMIC: track remaining free tricks as round progresses
+  // This catches the case where opponents take books and squeeze us
+  const totalTricksPlayed = ctx.teamTricks + ctx.oppTricks;
+  const tricksRemaining = tricksPerRound - totalTricksPlayed;
+  const teamStillNeeds = Math.max(0, ctx.teamBid - ctx.teamTricks);
+  const oppStillNeeds = Math.max(0, ctx.oppBid - ctx.oppTricks);
+  const remainingFree = tricksRemaining - teamStillNeeds - oppStillNeeds;
+
+  if (teamStillNeeds > 0) {
+    // We haven't made our bid yet — MAKE is priority
+    if (remainingFree <= 1) {
+      // Very tight — can't afford to duck, every trick matters
+      disposition = Math.max(disposition, 0);
+    }
+    if (remainingFree <= 0) {
+      // Not enough tricks for everyone — someone gets set, fight hard
+      disposition = Math.max(disposition, 1);
+    }
+    // Opponents taking books beyond their bid = they're setting us
+    const oppBooks = Math.max(0, ctx.oppTricks - ctx.oppBid);
+    if (oppBooks >= 2 && teamStillNeeds >= 2) {
+      disposition = Math.max(disposition, 1.5);
+    }
+  }
+
   // Look at current overtrick trajectory
   const teamBooks = Math.max(0, ctx.teamTricks - ctx.teamBid);
   if (teamBooks >= 2) {
