@@ -23,7 +23,13 @@ export function calculateDisposition(hand, ctx) {
 
   // If opponents already made their bid, can't set them — duck to avoid books
   if (ctx.oppTricks >= ctx.oppBid) {
-    disposition = Math.min(disposition, -1);
+    // If WE also made, hard duck — both teams made means pure book avoidance
+    if (ctx.teamTricks >= ctx.teamBid) {
+      disposition = Math.min(disposition, -2);
+    } else {
+      // Opponents made but we haven't — focus on making, not setting
+      disposition = Math.min(disposition, -1);
+    }
   }
 
   // Look at current overtrick trajectory

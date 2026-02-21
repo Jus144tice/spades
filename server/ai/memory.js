@@ -102,11 +102,22 @@ export function buildCardMemory(hand, gameState, botId, mode) {
     }
   }
 
+  // Count remaining cards per suit (outstanding = not in hand, not played)
+  // suitRemaining includes ALL unplayed cards (outstanding + in our hand)
+  const suitRemaining = {};
+  const handBySuit = {};
+  for (const suit of suits) {
+    handBySuit[suit] = hand.filter(c => c.suit === suit).length;
+    suitRemaining[suit] = outstanding[suit].length + handBySuit[suit];
+  }
+
   return {
     outstanding,
     highestOutstanding,
     knownVoids,
     cardsPlayedCount: cardsPlayed.length + currentTrick.length,
+    suitRemaining,
+    handBySuit,
   };
 }
 
@@ -118,6 +129,27 @@ export function isMasterCard(card, memory) {
 // Check if a specific opponent is known void in a suit
 export function isKnownVoid(playerId, suit, memory) {
   return memory.knownVoids[playerId] && memory.knownVoids[playerId].has(suit);
+}
+
+// Check if ANY opponent is known void in a suit
+export function anyOpponentVoid(suit, opponentIds, memory) {
+  if (!opponentIds || !memory.knownVoids) return false;
+  return opponentIds.some(id => memory.knownVoids[id] && memory.knownVoids[id].has(suit));
+}
+
+// Estimate how risky it is to lead a non-spade suit (chance of being trumped).
+// Returns 0 (safe) to 1 (very likely to be cut).
+export function suitCutRisk(suit, opponentIds, memory) {
+  if (suit === 'S') return 0;
+  // If any opponent is known void, very high risk
+  if (anyOpponentVoid(suit, opponentIds, memory)) return 1.0;
+  // Fewer remaining cards = higher chance someone is void
+  const remaining = memory.suitRemaining[suit] || 0;
+  if (remaining <= 1) return 0.9;
+  if (remaining <= 2) return 0.7;
+  if (remaining <= 3) return 0.5;
+  if (remaining <= 5) return 0.3;
+  return 0.1;
 }
 
 // Count guaranteed future winners in hand
