@@ -46,19 +46,6 @@ export default function Scoreboard() {
 
   return (
     <div className="scoreboard">
-      {teamStats.length > 0 && (
-        <div className="score-team">
-          <div className="score-team-name">{teamStats[0].names}</div>
-          <div className="score-value">{state.scores[teamStats[0].teamKey] ?? 0}</div>
-          <div className="score-books">{state.books[teamStats[0].teamKey] ?? 0} books</div>
-          {allBidsIn && (
-            <div className="score-bid-tracker">
-              Bid {teamStats[0].bid} &middot; Took {teamStats[0].tricks}/{teamStats[0].bid}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="score-center">
         <div className="round-label">Round {state.roundNumber}</div>
         {allBidsIn && (
@@ -74,19 +61,6 @@ export default function Scoreboard() {
             {tricksLeft} tricks left
           </div>
         )}
-        {/* Extra teams (3+) shown as compact rows in center */}
-        {teamStats.length > 2 && (
-          <div className="score-extra-teams">
-            {teamStats.slice(2).map(t => (
-              <div key={t.teamKey} className="score-extra-team">
-                <span className="score-extra-name">
-                  {t.names}{t.spoiler ? ' (2x)' : ''}
-                </span>
-                <span className="score-extra-value">{state.scores[t.teamKey] ?? 0}</span>
-              </div>
-            ))}
-          </div>
-        )}
         {state.roundHistory.length > 0 && (
           <button className="btn btn-tiny" onClick={() => setShowHistory(!showHistory)}>
             History
@@ -94,18 +68,22 @@ export default function Scoreboard() {
         )}
       </div>
 
-      {teamStats.length > 1 && (
-        <div className="score-team">
-          <div className="score-team-name">{teamStats[1].names}</div>
-          <div className="score-value">{state.scores[teamStats[1].teamKey] ?? 0}</div>
-          <div className="score-books">{state.books[teamStats[1].teamKey] ?? 0} books</div>
-          {allBidsIn && (
-            <div className="score-bid-tracker">
-              Bid {teamStats[1].bid} &middot; Took {teamStats[1].tricks}/{teamStats[1].bid}
+      <div className="score-teams-row">
+        {teamStats.map(t => (
+          <div key={t.teamKey} className="score-team">
+            <div className="score-team-name">
+              {t.names}{t.spoiler ? ' (2x)' : ''}
             </div>
-          )}
-        </div>
-      )}
+            <div className="score-value">{state.scores[t.teamKey] ?? 0}</div>
+            <div className="score-books">{state.books[t.teamKey] ?? 0} books</div>
+            {allBidsIn && (
+              <div className="score-bid-tracker">
+                Bid {t.bid} &middot; Took {t.tricks}/{t.bid}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
 
       {showHistory && (
         <div className="score-history-overlay" onClick={() => setShowHistory(false)}>

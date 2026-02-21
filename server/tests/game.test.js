@@ -444,7 +444,7 @@ describe('Scoring', () => {
     assert.equal(result.team1.books, 0);
   });
 
-  it('10-trick bonus when enabled', () => {
+  it('10-trick bonus when bid >= 10 and made', () => {
     const bids = { p1: 5, p2: 2, p3: 6, p4: 0 };
     const tricks = { p1: 5, p2: 2, p3: 6, p4: 0 };
     const scores = { team1: 0, team2: 0 };
@@ -455,6 +455,19 @@ describe('Scoring', () => {
 
     // Team 1: bid 11, took 11 = 110 + 50 bonus = 160
     assert.equal(result.team1.roundScore, 160);
+  });
+
+  it('10-trick bonus NOT awarded when bid < 10 even with 10+ tricks', () => {
+    const bids = { p1: 4, p2: 3, p3: 3, p4: 3 };
+    const tricks = { p1: 7, p2: 3, p3: 3, p4: 0 };
+    const scores = { team1: 0, team2: 0 };
+    const books = { team1: 0, team2: 0 };
+    const settings = { ...DEFAULT_GAME_SETTINGS, tenBidBonus: true };
+
+    const result = scoreRound(players4, bids, tricks, scores, books, settings, new Set(), mode4, lookup4);
+
+    // Team 1: bid 7 (4+3), took 10 (7+3) = made bid, 70 + 3 books = 73, NO bonus (bid < 10)
+    assert.equal(result.team1.roundScore, 73);
   });
 
   it('checkWinner detects winner', () => {

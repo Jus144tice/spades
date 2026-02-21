@@ -79,10 +79,9 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
       books += failedNilTricks;
     }
 
-    // 10+ trick bonus (only if setting is enabled) — spoiler gets double
+    // 10+ trick bonus: must bid 10+ combined AND make bid — spoiler gets double
     if (settings.tenBidBonus) {
-      const totalTeamTricks = playerIds.reduce((sum, id) => sum + tricksTaken[id], 0);
-      if (totalTeamTricks >= 10 && combinedBid > 0 && effectiveTricks >= combinedBid) {
+      if (combinedBid >= 10 && effectiveTricks >= combinedBid) {
         roundScore += TEN_TRICK_BONUS * multiplier;
       }
     }

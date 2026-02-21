@@ -130,7 +130,8 @@ function generateBotName(usedNames) {
 export function addBot(lobbyCode) {
   const lobby = lobbies.get(lobbyCode);
   if (!lobby) return { error: 'Lobby not found' };
-  if (lobby.players.length >= 10) return { error: 'Room is full' };
+  const mode = getMode(lobby.gameSettings?.gameMode || 4);
+  if (lobby.players.length >= mode.playerCount) return { error: `Room is full (${mode.playerCount}-player mode)` };
   if (lobby.game) return { error: 'Game already in progress' };
 
   const usedNames = lobby.players.map(p => p.name);

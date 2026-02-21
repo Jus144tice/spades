@@ -228,9 +228,8 @@ function analyzeTeam(teamPlayers, summary, teamKey, spoiler = false) {
     };
   });
 
-  // 10+ trick bonus — spoiler gets double
-  const totalTeamTricks = players.reduce((s, p) => s + p.tricks, 0);
-  const tenTrickBonus = totalTeamTricks >= 10 && combinedBid > 0 && madeBid;
+  // 10+ trick bonus: must bid 10+ combined AND make bid — spoiler gets double
+  const tenTrickBonus = combinedBid >= 10 && madeBid;
   const tenTrickBonusValue = tenTrickBonus ? TEN_TRICK_BONUS * multiplier : 0;
 
   // Book penalty — NOT doubled

@@ -38,7 +38,7 @@ export default function LobbyScreen() {
   // Check all teams are fully assigned for mode
   const allTeamsSet = assignedCount === gameMode;
 
-  const canAddBot = state.isHost && state.players.length < 10;
+  const canAddBot = state.isHost && state.players.length < gameMode;
 
   return (
     <div className="lobby-screen">

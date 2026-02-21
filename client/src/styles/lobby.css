@@ -696,6 +696,16 @@
     font-size: 13px;
   }
 
+  .lobby-screen {
+    overflow-y: auto;
+    max-height: 100%;
+  }
+
+  .game-settings-body {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+
   .lobby-actions {
     flex-direction: column;
   }
