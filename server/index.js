@@ -11,7 +11,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import pool, { initDB } from './db/index.js';
 import { registerHandlers } from './socketHandlers.js';
 import { validatePreferences, mergeWithDefaults, hasCompletedSetup, PRESETS, TABLE_COLORS, DEFAULTS } from './game/preferences.js';
-import { getPlayerStats, getLeaderboard } from './db/stats.js';
+import { getPlayerStats, getLeaderboard, getModeLeaderboard, getPlayerModeStats } from './db/stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -169,6 +169,52 @@ app.get('/api/leaderboard', async (req, res) => {
   } catch (err) {
     console.error('Leaderboard query error:', err);
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+app.get('/api/leaderboard/mode/:gameMode', async (req, res) => {
+  try {
+    const gameMode = parseInt(req.params.gameMode, 10);
+    if (![3, 4, 5, 6, 7, 8].includes(gameMode)) {
+      return res.status(400).json({ error: 'Invalid game mode' });
+    }
+    const result = await getModeLeaderboard(pool, {
+      gameMode,
+      sortBy: req.query.sort || 'games_won',
+      blindNil: req.query.blindNil || 'any',
+      moonshot: req.query.moonshot || 'any',
+      tenBidBonus: req.query.tenBidBonus || 'any',
+      minGames: parseInt(req.query.minGames, 10) || 1,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('Mode leaderboard query error:', err);
+    res.status(500).json({ error: 'Failed to fetch mode leaderboard' });
+  }
+});
+
+app.get('/api/stats/:userId/mode/:gameMode', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    const gameMode = parseInt(req.params.gameMode, 10);
+    if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' });
+    if (![3, 4, 5, 6, 7, 8].includes(gameMode)) {
+      return res.status(400).json({ error: 'Invalid game mode' });
+    }
+    const stats = await getPlayerModeStats(pool, userId, {
+      gameMode,
+      blindNil: req.query.blindNil || 'any',
+      moonshot: req.query.moonshot || 'any',
+      tenBidBonus: req.query.tenBidBonus || 'any',
+    });
+    res.json(stats || {
+      gamesPlayed: 0, gamesWon: 0, gamesLost: 0, winRate: 0,
+      totalRounds: 0, perfectBids: 0, bidAccuracy: 0,
+      nilAttempts: 0, nilsMade: 0, totalTricksTaken: 0, avgBid: '0',
+    });
+  } catch (err) {
+    console.error('Mode stats query error:', err);
+    res.status(500).json({ error: 'Failed to fetch mode stats' });
   }
 });
 

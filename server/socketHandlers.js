@@ -905,8 +905,13 @@ async function saveGameResults(game, winningTeam) {
 
     const gameMode = game.mode?.playerCount || 4;
     const gameRes = await client.query(
-      `INSERT INTO games (ended_at, winning_team, game_mode) VALUES (NOW(), $1, $2) RETURNING id`,
-      [winTeamNum, gameMode]
+      `INSERT INTO games (ended_at, winning_team, game_mode, win_target, book_threshold, blind_nil, moonshot, ten_bid_bonus)
+       VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [winTeamNum, gameMode,
+       game.settings.winTarget, game.settings.bookThreshold,
+       game.settings.blindNil || false,
+       game.settings.moonshot !== false,
+       game.settings.tenBidBonus !== false]
     );
     const gameId = gameRes.rows[0].id;
 

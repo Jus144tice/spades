@@ -1032,7 +1032,7 @@ body {
 }
 
 .leaderboard-modal {
-  max-width: 600px;
+  max-width: 700px;
 }
 
 .leaderboard-modal h2 {
@@ -1074,7 +1074,7 @@ body {
 }
 
 .leaderboard-table-wrap {
-  max-height: 280px;
+  max-height: 320px;
   overflow-y: auto;
   margin-bottom: 16px;
   border-radius: 8px;
@@ -1203,6 +1203,98 @@ body {
   margin: 0 auto;
 }
 
+/* Mode tabs */
+.leaderboard-modes {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.leaderboard-mode-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.leaderboard-mode-btn:hover {
+  border-color: var(--gold);
+  color: var(--text-primary);
+}
+
+.leaderboard-mode-btn.active {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Leaderboard filter bar */
+.leaderboard-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.leaderboard-filter-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.leaderboard-min-games {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.leaderboard-min-games label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.leaderboard-min-games input {
+  width: 48px;
+  padding: 3px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: center;
+  outline: none;
+}
+
+.leaderboard-min-games input:focus {
+  border-color: var(--accent);
+}
+
+/* Game count context */
+.leaderboard-context {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
 /* ===== Mobile: Leaderboard ===== */
 @media (max-width: 768px) {
   .leaderboard-btn {
@@ -1216,6 +1308,28 @@ body {
   .leaderboard-modal {
     max-width: 95%;
     padding: 16px 12px;
+  }
+
+  .leaderboard-modes {
+    gap: 3px;
+  }
+
+  .leaderboard-mode-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .leaderboard-filters {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .leaderboard-filter-chips {
+    gap: 3px;
+  }
+
+  .leaderboard-min-games {
+    margin-left: 0;
   }
 
   .leaderboard-sorts {

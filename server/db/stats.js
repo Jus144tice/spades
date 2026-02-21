@@ -266,3 +266,196 @@ export async function getPlayerStats(pool, userId) {
     highestGameScore: s.highest_game_score,
   };
 }
+
+/**
+ * Build WHERE conditions and params for game mode + settings filters.
+ */
+function buildModeFilters(gameMode, { blindNil = 'any', moonshot = 'any', tenBidBonus = 'any' } = {}) {
+  const conditions = ['g.game_mode = $1', 'g.ended_at IS NOT NULL'];
+  const params = [gameMode];
+  let idx = 2;
+
+  if (blindNil !== 'any') {
+    conditions.push(`g.blind_nil = $${idx}`);
+    params.push(blindNil === 'on');
+    idx++;
+  }
+  if (moonshot !== 'any') {
+    conditions.push(`g.moonshot = $${idx}`);
+    params.push(moonshot === 'on');
+    idx++;
+  }
+  if (tenBidBonus !== 'any') {
+    conditions.push(`g.ten_bid_bonus = $${idx}`);
+    params.push(tenBidBonus === 'on');
+    idx++;
+  }
+
+  return { conditions, params, nextIdx: idx };
+}
+
+/**
+ * Dynamic leaderboard for a specific game mode, with optional settings filters.
+ */
+export async function getModeLeaderboard(pool, options = {}) {
+  const {
+    gameMode,
+    sortBy = 'games_won',
+    blindNil = 'any',
+    moonshot = 'any',
+    tenBidBonus = 'any',
+    minGames = 1,
+  } = options;
+
+  const allowed = [
+    'games_won', 'games_played', 'win_rate', 'perfect_bids',
+    'bid_accuracy', 'nils_made', 'total_tricks_taken', 'avg_bid',
+  ];
+  const safeSortBy = allowed.includes(sortBy) ? sortBy : 'games_won';
+
+  const { conditions, params, nextIdx } = buildModeFilters(gameMode, { blindNil, moonshot, tenBidBonus });
+  const whereClause = conditions.join(' AND ');
+
+  const minGamesIdx = nextIdx;
+  params.push(minGames);
+
+  const query = `
+    WITH filtered_games AS (
+      SELECT g.id FROM games g WHERE ${whereClause}
+    ),
+    player_game_stats AS (
+      SELECT
+        gp.user_id,
+        COUNT(DISTINCT gp.game_id) AS games_played,
+        COUNT(DISTINCT gp.game_id) FILTER (WHERE gp.is_winner) AS games_won,
+        COUNT(DISTINCT gp.game_id) FILTER (WHERE NOT gp.is_winner) AS games_lost
+      FROM game_players gp
+      JOIN filtered_games fg ON fg.id = gp.game_id
+      WHERE gp.user_id IS NOT NULL
+      GROUP BY gp.user_id
+    ),
+    player_round_stats AS (
+      SELECT
+        rb.user_id,
+        COUNT(*) AS total_rounds,
+        COUNT(*) FILTER (WHERE rb.bid > 0 AND rb.tricks_taken = rb.bid) AS perfect_bids,
+        COUNT(*) FILTER (WHERE rb.bid = 0) AS nil_attempts,
+        COUNT(*) FILTER (WHERE rb.bid = 0 AND rb.tricks_taken = 0) AS nils_made,
+        COALESCE(SUM(rb.tricks_taken), 0) AS total_tricks_taken,
+        COALESCE(SUM(rb.bid), 0) AS total_bid_sum
+      FROM round_bids rb
+      JOIN filtered_games fg ON fg.id = rb.game_id
+      WHERE rb.user_id IS NOT NULL
+      GROUP BY rb.user_id
+    )
+    SELECT
+      u.id AS user_id,
+      u.display_name,
+      u.avatar_url,
+      pgs.games_played,
+      pgs.games_won,
+      pgs.games_lost,
+      ROUND(pgs.games_won::numeric / NULLIF(pgs.games_played, 0) * 100, 1) AS win_rate,
+      COALESCE(prs.total_rounds, 0) AS total_rounds,
+      COALESCE(prs.perfect_bids, 0) AS perfect_bids,
+      COALESCE(prs.nil_attempts, 0) AS nil_attempts,
+      COALESCE(prs.nils_made, 0) AS nils_made,
+      COALESCE(prs.total_tricks_taken, 0) AS total_tricks_taken,
+      CASE WHEN COALESCE(prs.total_rounds, 0) > 0
+        THEN ROUND(prs.total_bid_sum::numeric / prs.total_rounds, 1) ELSE 0
+      END AS avg_bid,
+      CASE WHEN COALESCE(prs.total_rounds, 0) > 0
+        THEN ROUND(prs.perfect_bids::numeric / prs.total_rounds * 100, 1) ELSE 0
+      END AS bid_accuracy
+    FROM player_game_stats pgs
+    JOIN users u ON u.id = pgs.user_id
+    LEFT JOIN player_round_stats prs ON prs.user_id = pgs.user_id
+    WHERE pgs.games_played >= $${minGamesIdx}
+    ORDER BY ${safeSortBy} DESC NULLS LAST, pgs.games_played DESC
+    LIMIT 50
+  `;
+
+  const result = await pool.query(query, params);
+
+  // Get total matching game count for context display
+  const countParams = params.slice(0, nextIdx - 1);
+  const countResult = await pool.query(
+    `SELECT COUNT(*) AS total FROM games g WHERE ${whereClause}`,
+    countParams
+  );
+  const totalGames = parseInt(countResult.rows[0]?.total || '0', 10);
+
+  return {
+    totalGames,
+    rows: result.rows.map((s, i) => ({
+      rank: i + 1,
+      userId: s.user_id,
+      displayName: s.display_name,
+      avatarUrl: s.avatar_url,
+      gamesPlayed: parseInt(s.games_played),
+      gamesWon: parseInt(s.games_won),
+      gamesLost: parseInt(s.games_lost),
+      winRate: parseFloat(s.win_rate) || 0,
+      totalRounds: parseInt(s.total_rounds),
+      perfectBids: parseInt(s.perfect_bids),
+      bidAccuracy: parseFloat(s.bid_accuracy) || 0,
+      nilAttempts: parseInt(s.nil_attempts),
+      nilsMade: parseInt(s.nils_made),
+      totalTricksTaken: parseInt(s.total_tricks_taken),
+      avgBid: parseFloat(s.avg_bid) || 0,
+    })),
+  };
+}
+
+/**
+ * Per-mode stats for a specific player.
+ */
+export async function getPlayerModeStats(pool, userId, options = {}) {
+  const { gameMode, blindNil = 'any', moonshot = 'any', tenBidBonus = 'any' } = options;
+
+  const { conditions, params, nextIdx } = buildModeFilters(gameMode, { blindNil, moonshot, tenBidBonus });
+  const whereClause = conditions.join(' AND ');
+
+  const userIdx = nextIdx;
+  params.push(userId);
+
+  const query = `
+    WITH filtered_games AS (
+      SELECT g.id FROM games g WHERE ${whereClause}
+    )
+    SELECT
+      COUNT(DISTINCT gp.game_id) AS games_played,
+      COUNT(DISTINCT gp.game_id) FILTER (WHERE gp.is_winner) AS games_won,
+      COUNT(DISTINCT gp.game_id) FILTER (WHERE NOT gp.is_winner) AS games_lost,
+      (SELECT COUNT(*) FROM round_bids rb JOIN filtered_games fg ON fg.id = rb.game_id WHERE rb.user_id = $${userIdx}) AS total_rounds,
+      (SELECT COUNT(*) FROM round_bids rb JOIN filtered_games fg ON fg.id = rb.game_id WHERE rb.user_id = $${userIdx} AND rb.bid > 0 AND rb.tricks_taken = rb.bid) AS perfect_bids,
+      (SELECT COUNT(*) FROM round_bids rb JOIN filtered_games fg ON fg.id = rb.game_id WHERE rb.user_id = $${userIdx} AND rb.bid = 0) AS nil_attempts,
+      (SELECT COUNT(*) FROM round_bids rb JOIN filtered_games fg ON fg.id = rb.game_id WHERE rb.user_id = $${userIdx} AND rb.bid = 0 AND rb.tricks_taken = 0) AS nils_made,
+      (SELECT COALESCE(SUM(rb.tricks_taken), 0) FROM round_bids rb JOIN filtered_games fg ON fg.id = rb.game_id WHERE rb.user_id = $${userIdx}) AS total_tricks_taken,
+      (SELECT COALESCE(SUM(rb.bid), 0) FROM round_bids rb JOIN filtered_games fg ON fg.id = rb.game_id WHERE rb.user_id = $${userIdx}) AS total_bid_sum
+    FROM game_players gp
+    JOIN filtered_games fg ON fg.id = gp.game_id
+    WHERE gp.user_id = $${userIdx}
+  `;
+
+  const result = await pool.query(query, params);
+  const s = result.rows[0];
+  if (!s || parseInt(s.games_played) === 0) return null;
+
+  const totalRounds = parseInt(s.total_rounds);
+  const perfectBids = parseInt(s.perfect_bids);
+  return {
+    gamesPlayed: parseInt(s.games_played),
+    gamesWon: parseInt(s.games_won),
+    gamesLost: parseInt(s.games_lost),
+    winRate: parseInt(s.games_played) > 0
+      ? Math.round(parseInt(s.games_won) / parseInt(s.games_played) * 100) : 0,
+    totalRounds,
+    perfectBids,
+    bidAccuracy: totalRounds > 0 ? Math.round(perfectBids / totalRounds * 100) : 0,
+    nilAttempts: parseInt(s.nil_attempts),
+    nilsMade: parseInt(s.nils_made),
+    totalTricksTaken: parseInt(s.total_tricks_taken),
+    avgBid: totalRounds > 0 ? (parseInt(s.total_bid_sum) / totalRounds).toFixed(1) : '0',
+  };
+}

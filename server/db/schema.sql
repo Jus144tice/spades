@@ -39,6 +39,29 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
+-- Add game settings columns if missing (for existing databases)
+DO $$ BEGIN
+  ALTER TABLE games ADD COLUMN win_target SMALLINT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE games ADD COLUMN book_threshold SMALLINT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE games ADD COLUMN blind_nil BOOLEAN DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE games ADD COLUMN moonshot BOOLEAN DEFAULT TRUE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE games ADD COLUMN ten_bid_bonus BOOLEAN DEFAULT TRUE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_games_mode ON games(game_mode);
+
 -- Game players (links users to games)
 CREATE TABLE IF NOT EXISTS game_players (
   id SERIAL PRIMARY KEY,
