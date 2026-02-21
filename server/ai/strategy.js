@@ -40,20 +40,28 @@ export function calculateDisposition(hand, ctx) {
   const oppStillNeeds = Math.max(0, ctx.oppBid - ctx.oppTricks);
   const remainingFree = tricksRemaining - teamStillNeeds - oppStillNeeds;
 
-  if (teamStillNeeds > 0) {
-    // We haven't made our bid yet — MAKE is priority
+  const botStillNeeds = ctx.botStillNeeds != null ? ctx.botStillNeeds : teamStillNeeds;
+
+  if (botStillNeeds > 0) {
+    // Bot PERSONALLY needs tricks — strong urgency
     if (remainingFree <= 1) {
-      // Very tight — can't afford to duck, every trick matters
       disposition = Math.max(disposition, 0);
     }
     if (remainingFree <= 0) {
-      // Not enough tricks for everyone — someone gets set, fight hard
       disposition = Math.max(disposition, 1);
     }
-    // Opponents taking books beyond their bid = they're setting us
+    const oppBooks = Math.max(0, ctx.oppTricks - ctx.oppBid);
+    if (oppBooks >= 2 && botStillNeeds >= 2) {
+      disposition = Math.max(disposition, 1.5);
+    }
+  } else if (teamStillNeeds > 0) {
+    // Only partner needs tricks — trust them, gentle nudge only
+    if (remainingFree <= 0) {
+      disposition = Math.max(disposition, -0.5);
+    }
     const oppBooks = Math.max(0, ctx.oppTricks - ctx.oppBid);
     if (oppBooks >= 2 && teamStillNeeds >= 2) {
-      disposition = Math.max(disposition, 1.5);
+      disposition = Math.max(disposition, 0.5);
     }
   }
 

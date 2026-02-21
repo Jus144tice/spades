@@ -48,6 +48,7 @@ export function botPlayCard(hand, gameState, botId) {
   const opp1IsNil = opp1Id ? opp1Bid === 0 : false;
   const opp2IsNil = opp2Id ? opp2Bid === 0 : false;
   const seatPosition = currentTrick.length;
+  const botStillNeeds = Math.max(0, (botBidVal || 0) - botTricks);
 
   const memory = buildCardMemory(hand, gameState, botId, mode);
 
@@ -56,6 +57,7 @@ export function botPlayCard(hand, gameState, botId) {
     opp1IsNil, opp2IsNil, teamTricks, teamBid, oppTricks, oppBid,
     botTricks, botBidVal, partnerId, players, botIndex,
     opp1Id, opp2Id, opponentIds, seatPosition, partnerBid, partnerTricks,
+    botStillNeeds,
     memory,
     rawCardsPlayed: gameState.cardsPlayed || [],
   };
@@ -76,44 +78,49 @@ export function botPlayCard(hand, gameState, botId) {
     ctx.disposition += 0.5; // Defensive aggression
   }
 
-  // Guaranteed-to-make detection
+  // Guaranteed-to-make detection — based on bot's PERSONAL remaining needs
   ctx.canGuaranteeBid = false;
-  if (needMore && !botIsNil) {
+  ctx.guaranteedWinners = 0;
+  if (!botIsNil) {
     const guaranteed = countGuaranteedWinners(hand, memory);
-    if (guaranteed >= tricksNeeded) {
+    ctx.guaranteedWinners = guaranteed;
+    if (guaranteed >= botStillNeeds) {
       ctx.canGuaranteeBid = true;
     }
-    ctx.guaranteedWinners = guaranteed;
   }
 
   // Count masters in hand — used to decide if we can spare any for consolidation
   ctx.mastersInHand = hand.filter(c => isMasterCard(c, memory));
-  ctx.mastersToSpare = Math.max(0, ctx.mastersInHand.length - tricksNeeded);
+  ctx.mastersToSpare = Math.max(0, ctx.mastersInHand.length - botStillNeeds);
 
-  // --- THREE PRIORITIES: MAKE > SET > DUCK ---
-  // MAKE: We still need tricks to hit our bid — never sacrifice this
-  // SET:  Bid is secure AND opponents haven't made — try to take their tricks
-  // DUCK: Bid is secure AND can't set opponents — avoid books
+  // --- DISPOSITION-DRIVEN PLAY ---
+  // Disposition is a spectrum, not a binary switch.
+  // Only commit fully to SET or DUCK with strong signals.
+  // Moderate values (-1 to 1) = play normally, don't overcommit.
 
-  const bidSafelyMade = !needMore; // Actually took enough tricks
+  const bidSafelyMade = !needMore;
   const effectivelyMadeBid = bidSafelyMade || ctx.canGuaranteeBid;
 
-  ctx.setMode = effectivelyMadeBid && ctx.disposition > 0 && oppTricks < oppBid;
-  ctx.duckMode = effectivelyMadeBid && ctx.disposition < 0;
+  // Require strong disposition for full mode commitment
+  ctx.setMode = effectivelyMadeBid && ctx.disposition >= 1 && oppTricks < oppBid;
+  ctx.duckMode = effectivelyMadeBid && ctx.disposition <= -1;
 
-  // MAKE PRIORITY OVERRIDE: if we still need tricks, never let duck mode
-  // cause us to get set. Don't dump cards we need for our bid.
+  // MAKE PRIORITY: protect bot's personal bid, trust partner for theirs
   if (needMore && !bidSafelyMade) {
-    // Track remaining situation
     const tricksPerRound = mode ? mode.tricksPerRound : 13;
     const totalTricksPlayed = teamTricks + oppTricks;
     ctx.tricksRemaining = tricksPerRound - totalTricksPlayed;
-    const oppStillNeeds = Math.max(0, oppBid - oppTricks);
-    ctx.remainingFree = ctx.tricksRemaining - tricksNeeded - oppStillNeeds;
 
-    // If remaining free tricks are tight, making bid is priority over ducking
-    if (ctx.remainingFree <= 2 || !ctx.canGuaranteeBid) {
-      ctx.duckMode = false; // Don't duck when you might get set
+    if (botStillNeeds > 0) {
+      // Bot personally needs tricks — don't duck away our bid
+      ctx.duckMode = false;
+    } else if (ctx.tricksRemaining > 0) {
+      // Bot made its bid, partner still needs — trust partner
+      // Only step in if partner is clearly struggling
+      const partnerPace = tricksNeeded / ctx.tricksRemaining;
+      if (partnerPace > 0.7 || ctx.compensateForPartner) {
+        ctx.duckMode = false;
+      }
     }
   }
 
