@@ -159,13 +159,19 @@ export function botPlayCard(hand, gameState, botId) {
   }
 
   // MAKE PRIORITY: protect bot's personal bid, trust partner for theirs
-  if (needMore && !bidSafelyMade && !ctx.desperateSet && !ctx.desperateBookDump) {
-    const totalTricksPlayed = teamTricks + oppTricks;
-    ctx.tricksRemaining = tricksPerRound - totalTricksPlayed;
+  // But respect trick buffer — don't go all-out when there's plenty of room
+  const totalTricksPlayed = teamTricks + oppTricks;
+  ctx.tricksRemaining = tricksPerRound - totalTricksPlayed;
+  ctx.trickBuffer = ctx.tricksRemaining - tricksNeeded; // free tricks beyond what team needs
 
+  if (needMore && !bidSafelyMade && !ctx.desperateSet && !ctx.desperateBookDump) {
     if (botStillNeeds > 0) {
-      // Bot personally needs tricks — don't duck away our bid
-      ctx.duckMode = false;
+      const personalBuffer = ctx.tricksRemaining - botStillNeeds;
+      if (personalBuffer <= 1) {
+        // Tight — every trick matters, can't afford to duck
+        ctx.duckMode = false;
+      }
+      // With buffer >= 2, leave duckMode as disposition set it — play selectively
     } else if (ctx.tricksRemaining > 0) {
       // Bot made its bid, partner still needs — trust partner
       // Only step in if partner is clearly struggling
@@ -302,6 +308,13 @@ function leadWhenNeedingTricks(validCards, hand, ctx) {
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
   const memory = ctx.memory;
+  const buffer = ctx.trickBuffer || 0;
+
+  // Bot already made its personal bid and there's healthy buffer — lead passively
+  // Let partner take their own tricks instead of gobbling everything up
+  if (ctx.botStillNeeds <= 0 && buffer >= 2) {
+    return leadInDuckMode(validCards, hand, ctx);
+  }
 
   // If opponents are setting us, cash guaranteed winners before they get trumped
   if (ctx.urgentBid || ctx.compensateForPartner) {
@@ -678,8 +691,24 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
       return signalWithFollow(cardsOfSuit, winningValue, ctx);
     }
 
+    // Buffer-aware trick-taking: don't grab every trick when there's plenty of room
+    const buffer = ctx.trickBuffer || 0;
+    if (ctx.botStillNeeds <= 0 && buffer >= 2) {
+      // Bot made its bid, partner still needs — play passively, let partner take theirs
+      return signalWithFollow(cardsOfSuit, winningValue, ctx);
+    }
+
     const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
     if (beaters.length > 0) {
+      // With healthy buffer, only beat if it's a cheap win (don't waste high cards)
+      if (ctx.botStillNeeds > 0 && buffer >= 3) {
+        const cheapBeaters = beaters.filter(c => getEffectiveValue(c, ledSuit) <= RANK_VALUE['J']);
+        if (cheapBeaters.length > 0) return pickLowest(cheapBeaters);
+        // No cheap beaters — only commit a high card if we really need it
+        if (ctx.botStillNeeds >= 2) return pickLowest(beaters);
+        return signalWithFollow(cardsOfSuit, winningValue, ctx);
+      }
+
       if (ctx.urgentBid && ctx.seatPosition <= 1) {
         const safeBeaters = beaters.filter(c => getEffectiveValue(c, ledSuit) >= RANK_VALUE['Q']);
         if (safeBeaters.length > 0 && beaters.length > 1) return pickLowest(safeBeaters);
@@ -808,6 +837,14 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
         const beaten = trumpBeaters(spades, currentTrick);
         if (beaten) return beaten;
       }
+      if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+      return pickLowest(hand);
+    }
+
+    // Buffer-aware trumping: don't waste spades when there's plenty of room
+    const buffer = ctx.trickBuffer || 0;
+    if (ctx.botStillNeeds <= 0 && buffer >= 2) {
+      // Bot made its bid, partner still needs — don't trump, let partner handle it
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
       return pickLowest(hand);
     }
