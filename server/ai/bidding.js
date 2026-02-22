@@ -94,6 +94,11 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
     bid = desperationBidAdjust(bid, tricks, partnerBid, opponentBids, desp);
   }
 
+  // "Go for it" — opportunistic stretching when behind but not desperate
+  if (!desp.desperate && desp.ourScore < desp.oppScore && desp.oppScore > 0) {
+    bid = goForItAdjust(bid, tricks, hand, sortedSpades, spades, suits, partnerBid, opponentBids, desp);
+  }
+
   return Math.max(1, Math.min(13, bid));
 }
 
@@ -163,6 +168,9 @@ export function getDesperationContext(gameState, botId, partnerBid, opponentBids
   // Is partner's bid known? (meaning we're the second bidder)
   result.isLastBidder = partnerBid !== undefined && partnerBid !== null;
 
+  // 10-BID: is the bonus enabled? (needed by both desperation and go-for-it)
+  result.tenBidViable = !!(settings && settings.tenBidBonus !== false);
+
   // Can opponents win this round?
   const oppProjected = result.oppScore + result.oppBidTotal * 10;
   result.oppCanWin = oppProjected >= result.winTarget;
@@ -183,9 +191,6 @@ export function getDesperationContext(gameState, botId, partnerBid, opponentBids
   const oppBooksToThreshold = result.bookThreshold - result.oppBooks;
   result.bookSetViable = oppBooksToThreshold <= 5 && oppBooksToThreshold > 0;
   result.oppBooksNeeded = oppBooksToThreshold;
-
-  // 10-BID: is the bonus enabled and can we plausibly reach 10?
-  result.tenBidViable = !!(settings && settings.tenBidBonus !== false);
 
   return result;
 }
@@ -256,6 +261,85 @@ function desperationBidAdjust(normalBid, rawTricks, partnerBid, opponentBids, de
   // 5. Fallback: bid aggressively — maximize our own score to stay alive
   // Don't trim for overbidding (already skipped above), bid honest strength
   return normalBid;
+}
+
+// --- GO FOR IT ---
+// Opportunistic bid stretching when behind in points but not desperate.
+// Only stretches when the upside justifies the risk.
+
+function goForItAdjust(bid, rawTricks, hand, sortedSpades, spades, suits, partnerBid, opponentBids, desp) {
+  const partnerBidVal = (partnerBid !== undefined && partnerBid !== null && partnerBid > 0) ? partnerBid : 0;
+  const combinedBid = bid + partnerBidVal;
+  const deficit = desp.oppScore - desp.ourScore;
+
+  // Scale willingness by how far behind we are
+  // Small deficit (30-80): only stretch if very close to target
+  // Medium deficit (80-150): willing to take a moderate gamble
+  // Large deficit (150+): stretch aggressively
+  const willingness = deficit < 50 ? 0.3 : deficit < 100 ? 0.5 : deficit < 200 ? 0.7 : 1.0;
+
+  // 1. NIL STRETCH: bid is 1, hand is borderline nil, bonus is worth the risk
+  if (bid === 1 && rawTricks < 1.5 && willingness >= 0.5) {
+    // Partner should be able to cover (bid >= 3), or we're first bidder with a very nil-friendly hand
+    const partnerCanCover = partnerBidVal >= 3;
+    const firstBidderSafe = (partnerBid === undefined || partnerBid === null) && rawTricks < 1.0;
+    if ((partnerCanCover || firstBidderSafe) && canStretchToNil(hand, sortedSpades, spades, suits)) {
+      return 0;
+    }
+  }
+
+  // 2. TEN-BID STRETCH: combined is 8-9, stretch to 10 for +50 bonus
+  if (desp.tenBidViable && partnerBidVal > 0 && combinedBid >= 8 && combinedBid < 10) {
+    const stretch = 10 - combinedBid;
+    // Raw hand strength must be within 1.5 of the stretched bid
+    if (rawTricks >= bid + stretch - 1.5 && willingness >= 0.3) {
+      return bid + stretch;
+    }
+  }
+
+  // 3. SET STRETCH: +1 bid gets us into set territory
+  if (partnerBidVal > 0 && desp.oppBidTotal > 0) {
+    const tricksToSet = desp.tricksPerRound - desp.oppBidTotal + 1;
+    const mySetBid = Math.max(1, tricksToSet - partnerBidVal);
+
+    // Only stretch if it's just 1 more than normal bid and hand can plausibly support it
+    if (mySetBid === bid + 1 && rawTricks >= bid - 0.5 && willingness >= 0.5) {
+      // Only worth it for meaningful opponent bids (swing of 60+ points)
+      const setSwing = desp.oppBidTotal * 20;
+      if (setSwing >= 60) {
+        return mySetBid;
+      }
+    }
+  }
+
+  return bid;
+}
+
+// Check if a hand that evaluated as bid=1 can plausibly stretch to nil.
+// More relaxed than normal nil but stricter than desperation nil.
+function canStretchToNil(hand, sortedSpades, spades, suits) {
+  const spadeCount = spades.length;
+  const highestSpade = sortedSpades.length > 0 ? RANK_VALUE[sortedSpades[0].rank] : 0;
+
+  // Never stretch with A/K of spades
+  if (highestSpade >= 13) return false;
+  // Q of spades only if short (2 or fewer)
+  if (highestSpade === 12 && spadeCount >= 3) return false;
+  // J of spades only if short (2 or fewer)
+  if (highestSpade === 11 && spadeCount >= 3) return false;
+
+  const highCards = hand.filter(c => RANK_VALUE[c.rank] >= 12).length;
+  if (highCards >= 2) return false;
+
+  // Off-suit aces are dangerous if we have length (stuck following with them)
+  for (const [suitKey, suitCards] of Object.entries(suits)) {
+    if (suitCards.length === 0) continue;
+    const sorted = [...suitCards].sort((a, b) => getCardValue(b) - getCardValue(a));
+    if (RANK_VALUE[sorted[0].rank] === 14 && suitCards.length >= 3) return false;
+  }
+
+  const lowCards = hand.filter(c => RANK_VALUE[c.rank] <= 7).length;
+  return lowCards >= 5;
 }
 
 /**
