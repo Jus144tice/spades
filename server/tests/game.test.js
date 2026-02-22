@@ -542,7 +542,7 @@ describe('Spoiler Scoring', () => {
     assert.equal(result.team3.roundScore, 200);
   });
 
-  it('spoiler nil failed is NOT doubled', () => {
+  it('spoiler nil failed has no penalty', () => {
     const bids = { p1: 3, p2: 3, p3: 3, p4: 3, p5: 0 };
     const tricks = { p1: 3, p2: 3, p3: 3, p4: 2, p5: 2 };
     const scores = initTeamScores(mode5);
@@ -550,8 +550,8 @@ describe('Spoiler Scoring', () => {
 
     const result = scoreRound(players5, bids, tricks, scores, books, DEFAULT_GAME_SETTINGS, new Set(), mode5, lookup5);
 
-    // Spoiler nil failed: -100 (NOT doubled)
-    assert.equal(result.team3.roundScore, -100);
+    // Spoiler nil failed: no penalty (solo player, no partner to protect nil)
+    assert.equal(result.team3.roundScore, 0);
   });
 
   it('spoiler overtricks (books) are NOT doubled', () => {

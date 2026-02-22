@@ -50,8 +50,8 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
         // Nil made — spoiler gets double bonus
         roundScore += bonus * multiplier;
       } else {
-        // Nil failed — spoiler does NOT get double penalty (too easy to set a solo player)
-        roundScore -= bonus;
+        // Nil failed — spoiler gets NO penalty (solo player, no partner to protect nil)
+        if (!isSpoiler) roundScore -= bonus;
         // Failed nil tricks count toward partner's bid, NOT auto-booked
         failedNilTricks += tricksTaken[pid];
       }

@@ -141,7 +141,7 @@ const sections = [
               <strong>8 Players</strong>
               <span className="rules-mode-tag">4 teams of 2</span>
             </div>
-            <p>4 pairs. Full mega deck added (52 mega cards including Aces), 13 cards each. Partners sit across.</p>
+            <p>4 pairs. A full set of mega cards is added (one for every card in the deck), 13 cards each. Partners sit across.</p>
           </div>
         </div>
       </>
@@ -152,12 +152,11 @@ const sections = [
     title: 'Mega Cards (5-8 Player)',
     content: (
       <>
-        <p>In 5-8 player modes, <strong>mega cards</strong> are added to the deck so there are enough cards for everyone. Mega cards look like regular cards but have a glowing border.</p>
+        <p>In 5-8 player modes, <strong>mega cards</strong> are added to the deck so there are enough cards for everyone. They're duplicates of existing cards starting from the lowest ranks upward. Mega cards look like regular cards but have a glowing border.</p>
         <p>How they rank:</p>
         <ul>
           <li>A mega card <strong>beats the same rank</strong> regular card (mega 7 beats regular 7)</li>
           <li>A mega card <strong>loses to the next rank up</strong> (mega 7 loses to regular 8)</li>
-          <li>Most modes have no mega Aces — in 8-player, mega Aces are included (a mega Ace beats a regular Ace)</li>
         </ul>
         <div className="rules-callout">
           Think of mega cards as "half-ranks" — a mega 7 slots in between a regular 7 and a regular 8. Same follow-suit rules apply.
@@ -172,7 +171,7 @@ const sections = [
       <>
         <p>In 5 and 7-player games, one player is the <strong>spoiler</strong> — a solo player with no partner.</p>
         <ul>
-          <li><strong>Double scoring:</strong> The spoiler earns double points on made bids (+20 per trick instead of +10) and double on successful nils (+200). Failed bids and nils are penalized at normal rates.</li>
+          <li><strong>Double scoring:</strong> The spoiler earns double points on made bids (+20 per trick instead of +10) and double on successful nils (+200). Failed bids are penalized at double. Failed nils have no point penalty — with no partner to protect you, simply getting 0 points for the round is punishment enough.</li>
           <li><strong>No partner:</strong> The spoiler bids and plays alone. Nobody to cover for you or help make your bid.</li>
           <li><strong>Same win condition:</strong> The spoiler wins by reaching the same score target as everyone else.</li>
         </ul>

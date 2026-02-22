@@ -216,14 +216,14 @@ function analyzeTeam(teamPlayers, summary, teamKey, spoiler = false) {
   // Overtricks (books) — NOT doubled
   const overtricks = madeBid && combinedBid > 0 ? effectiveTricks - combinedBid : 0;
 
-  // Nil points — spoiler gets double on make, normal on miss
+  // Nil points — spoiler gets double on make, no penalty on miss
   const nilPoints = nilPlayers.map(p => {
     const bonus = p.isBlindNil ? BLIND_NIL_BONUS : NIL_BONUS;
     const doubled = spoiler && p.nilSuccess;
     return {
       name: p.name,
       isBlindNil: p.isBlindNil,
-      points: p.nilSuccess ? bonus * multiplier : -bonus,
+      points: p.nilSuccess ? bonus * multiplier : (spoiler ? 0 : -bonus),
       doubled,
     };
   });
