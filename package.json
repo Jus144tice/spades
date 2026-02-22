@@ -2,6 +2,7 @@
   "name": "spades",
   "version": "1.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev:server": "node --watch --max-http-header-size=65536 server/index.js",

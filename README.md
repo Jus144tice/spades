@@ -10,7 +10,7 @@ A multiplayer Spades card game with Google OAuth login, real-time gameplay via S
   - 5p: 2 teams of 2 + 1 spoiler (2x scoring)
   - 6p: 3 teams of 2
   - 7p: 3 teams of 2 + 1 spoiler (2x scoring)
-  - 8p: 4 teams of 2, 12 cards per player
+  - 8p: 4 teams of 2 (full double deck)
 - **Real-time multiplayer** via Socket.io (1-8 human players, bots fill remaining seats)
 - **Google OAuth** login (required to play)
 - **Mega cards** for 5-8 player modes (extended deck with visually distinct mega variants)
@@ -171,5 +171,9 @@ spades/
 ### Multi-player Modes
 
 - **5p/7p (Spoiler):** One solo player whose bid/nil scoring is doubled. Partners still sit directly across using a hexagonal (5p) or octagonal (7p) layout.
-- **6p/8p:** Additional teams of 2. 8-player uses 12 cards per player.
-- **Mega cards:** Modes with 5+ players use an extended deck with mega variants of low cards (2 through King, no mega Aces). Mega cards beat the same rank but lose to the next rank up.
+- **6p/8p:** Additional teams of 2. 8-player uses a full double deck (104 cards, 13 per player).
+- **Mega cards:** Modes with 5+ players use an extended deck with mega card variants. 5-7 player modes add mega cards from low ranks up (no mega Aces). 8-player uses a full mega deck including Aces. Mega cards beat the same rank but lose to the next rank up.
+
+## License
+
+This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
