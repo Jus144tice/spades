@@ -8,6 +8,9 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
+import { doubleCsrf } from 'csrf-csrf';
 import pool, { initDB } from './db/index.js';
 import { registerHandlers } from './socketHandlers.js';
 import { validatePreferences, mergeWithDefaults, hasCompletedSetup, PRESETS, TABLE_COLORS, DEFAULTS } from './game/preferences.js';
@@ -37,8 +40,33 @@ const sessionMiddleware = session({
 
 app.use(sessionMiddleware);
 app.use(express.json());
+app.use(cookieParser(process.env.SESSION_SECRET));
 app.use(passport.initialize());
 app.use(passport.session());
+
+// --- Rate limiting ---
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
+
+// --- CSRF protection (double-submit cookie) ---
+const { generateToken, doubleCsrfProtection } = doubleCsrf({
+  getSecret: () => process.env.SESSION_SECRET,
+  cookieName: 'csrf',
+  cookieOptions: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    signed: true,
+  },
+  getTokenFromRequest: (req) => req.headers['x-csrf-token'],
+});
+app.use(doubleCsrfProtection);
 
 // --- Passport Google OAuth ---
 passport.use(new GoogleStrategy({
@@ -96,6 +124,7 @@ app.get('/auth/google/callback',
 );
 
 app.get('/auth/me', (req, res) => {
+  const csrfToken = generateToken(req, res);
   if (req.isAuthenticated()) {
     const prefs = req.user.preferences || {};
     res.json({
@@ -104,9 +133,10 @@ app.get('/auth/me', (req, res) => {
       avatarUrl: req.user.avatar_url,
       preferences: mergeWithDefaults(prefs),
       hasCompletedSetup: hasCompletedSetup(prefs),
+      csrfToken,
     });
   } else {
-    res.status(401).json({ error: 'Not authenticated' });
+    res.status(401).json({ error: 'Not authenticated', csrfToken });
   }
 });
 

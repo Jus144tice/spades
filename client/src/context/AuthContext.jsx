@@ -1,6 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 const AuthContext = createContext(null);
+
+// Module-level CSRF token storage
+let csrfToken = '';
+export function getCsrfToken() { return csrfToken; }
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -8,12 +12,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     fetch('/auth/me')
-      .then(res => {
-        if (res.ok) return res.json();
-        return null;
-      })
+      .then(res => res.json().catch(() => null))
       .then(data => {
-        setUser(data);
+        if (data?.csrfToken) csrfToken = data.csrfToken;
+        if (data?.id) {
+          setUser(data);
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -24,7 +28,10 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await fetch('/auth/logout', { method: 'POST' });
+    await fetch('/auth/logout', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken },
+    });
     setUser(null);
     window.location.href = '/';
   };

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useAuth } from './AuthContext.jsx';
+import { useAuth, getCsrfToken } from './AuthContext.jsx';
 
 const PreferencesContext = createContext(null);
 
@@ -30,7 +30,7 @@ export function PreferencesProvider({ children }) {
     try {
       const res = await fetch('/api/preferences', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
         body: JSON.stringify(newPrefs),
       });
       if (!res.ok) throw new Error('Failed to save preferences');
