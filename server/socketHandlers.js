@@ -83,6 +83,9 @@ function buildBotGameState(game) {
     cardsPlayed: game.cardsPlayed,
     mode: game.mode,
     teamLookup: game.teamLookup,
+    scores: game.scores,
+    books: game.books,
+    settings: game.settings,
   };
 }
 
@@ -731,7 +734,7 @@ function executeAfkTurn(io, lobbyCode, playerId) {
 
   if (game.phase === 'bidding') {
     const ctx = getBidContext(game, playerId);
-    const bid = botBid(ctx.hand, ctx.partnerBid, ctx.opponentBids, game);
+    const bid = botBid(ctx.hand, ctx.partnerBid, ctx.opponentBids, game, botId);
 
     const result = game.placeBid(playerId, bid, { blindNil: false });
     if (result.error) return;
@@ -826,7 +829,7 @@ function executeBotTurn(io, lobbyCode, botId) {
 
     let bid, isBlindNil = false;
     if (goBlindNil) { bid = 0; isBlindNil = true; }
-    else { bid = botBid(ctx.hand, ctx.partnerBid, ctx.opponentBids, game); }
+    else { bid = botBid(ctx.hand, ctx.partnerBid, ctx.opponentBids, game, botId); }
 
     const result = game.placeBid(botId, bid, { blindNil: isBlindNil });
     if (result.error) return;

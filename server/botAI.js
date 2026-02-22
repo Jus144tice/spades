@@ -15,6 +15,7 @@ import { calculateDisposition, estimateOpponentDisposition, signalWithFollow, si
 
 // Re-export bidding functions so socketHandlers.js import path stays the same
 export { botBid, evaluateBlindNil } from './ai/bidding.js';
+import { getDesperationContext } from './ai/bidding.js';
 
 // --- CARD PLAY ---
 
@@ -78,6 +79,49 @@ export function botPlayCard(hand, gameState, botId) {
     ctx.disposition += 0.5; // Defensive aggression
   }
 
+  // --- DESPERATION CONTEXT ---
+  // Check if opponents are about to win — override disposition for survival
+  ctx.desperateSet = false;
+  ctx.desperateBookDump = false;
+  const tricksPerRound = mode ? mode.tricksPerRound : 13;
+
+  if (gameState.scores && botId) {
+    const opponentBids = opponentIds.map(id => bids[id] || 0);
+    const desp = getDesperationContext(gameState, botId, partnerBid, opponentBids);
+
+    if (desp.desperate) {
+      const totalTricksPlayed = teamTricks + oppTricks;
+      const tricksLeft = tricksPerRound - totalTricksPlayed;
+      const oppStillNeeds = Math.max(0, desp.oppBidTotal - oppTricks);
+
+      // Can we still set them? (they still need tricks and there are enough left)
+      if (oppStillNeeds > 0 && tricksLeft > 0) {
+        // Set mode: take as many tricks as possible to deny opponents
+        ctx.desperateSet = true;
+        ctx.disposition = Math.max(ctx.disposition, 2.5); // hard set override
+      } else if (oppStillNeeds <= 0) {
+        // Opponents already made their bid — set is impossible
+        // Pivot to book-dump: force opponents to take extra tricks (books)
+        if (desp.bookSetViable) {
+          ctx.desperateBookDump = true;
+          ctx.disposition = Math.min(ctx.disposition, -2.5); // hard duck — let them win tricks
+        }
+      }
+
+      // Mid-round pivot: if we were trying to set but it's now hopeless, dump books
+      if (ctx.desperateSet && oppStillNeeds > 0 && tricksLeft > 0) {
+        // Calculate if we can realistically deny enough tricks
+        const ourPotential = hand.filter(c => isMasterCard(c, memory)).length + (botStillNeeds > 0 ? 0 : 1);
+        if (ourPotential < oppStillNeeds && desp.bookSetViable) {
+          // Can't set — pivot to book-dump
+          ctx.desperateSet = false;
+          ctx.desperateBookDump = true;
+          ctx.disposition = Math.min(ctx.disposition, -2);
+        }
+      }
+    }
+  }
+
   // Guaranteed-to-make detection — based on bot's PERSONAL remaining needs
   ctx.canGuaranteeBid = false;
   ctx.guaranteedWinners = 0;
@@ -105,9 +149,17 @@ export function botPlayCard(hand, gameState, botId) {
   ctx.setMode = effectivelyMadeBid && ctx.disposition >= 1 && oppTricks < oppBid;
   ctx.duckMode = effectivelyMadeBid && ctx.disposition <= -1;
 
+  // Desperation overrides normal mode logic
+  if (ctx.desperateSet) {
+    ctx.setMode = true;
+    ctx.duckMode = false;
+  } else if (ctx.desperateBookDump) {
+    ctx.setMode = false;
+    ctx.duckMode = true;
+  }
+
   // MAKE PRIORITY: protect bot's personal bid, trust partner for theirs
-  if (needMore && !bidSafelyMade) {
-    const tricksPerRound = mode ? mode.tricksPerRound : 13;
+  if (needMore && !bidSafelyMade && !ctx.desperateSet && !ctx.desperateBookDump) {
     const totalTricksPlayed = teamTricks + oppTricks;
     ctx.tricksRemaining = tricksPerRound - totalTricksPlayed;
 
@@ -139,6 +191,9 @@ function botLead(hand, ctx) {
   if (ctx.botIsNil) return leadAsNil(validCards);
   if (ctx.partnerIsNil) return leadToProtectNil(validCards, hand, ctx);
   if (ctx.opp1IsNil || ctx.opp2IsNil) return leadToBustNil(validCards, ctx);
+
+  // Desperation book-dump: lead low cards to force opponents to take tricks
+  if (ctx.desperateBookDump) return leadBookDump(validCards, hand, ctx);
 
   if (ctx.needMore) {
     if (ctx.canGuaranteeBid) {
@@ -440,6 +495,46 @@ function leadInDuckMode(validCards, hand, ctx) {
   return pickLowest(validCards);
 }
 
+// Book-dump lead: the goal is to force opponents to take tricks they don't want.
+// Lead low cards in suits opponents must follow (not void in).
+// Avoid leading in suits where we have masters — those would win and give US tricks.
+function leadBookDump(validCards, hand, ctx) {
+  const offSuit = validCards.filter(c => c.suit !== 'S');
+  const memory = ctx.memory;
+
+  if (offSuit.length > 0) {
+    // Avoid our masters — we want to LOSE these tricks
+    const nonMasters = offSuit.filter(c => !isMasterCard(c, memory));
+    const candidates = nonMasters.length > 0 ? nonMasters : offSuit;
+
+    // Prefer suits where opponents are NOT void (they must follow and might win)
+    const oppMustFollow = candidates.filter(c => !anyOpponentVoid(c.suit, ctx.opponentIds, memory));
+    const pool = oppMustFollow.length > 0 ? oppMustFollow : candidates;
+
+    // Lead the second-lowest card from the longest suit
+    // (save absolute lowest for later ducking, but lead low enough to lose)
+    const groups = groupBySuit(pool);
+    let bestSuit = null;
+    let bestLen = -1;
+    for (const [suit, cards] of Object.entries(groups)) {
+      const suitLen = hand.filter(c => c.suit === suit).length;
+      if (suitLen > bestLen) {
+        bestLen = suitLen;
+        bestSuit = suit;
+      }
+    }
+    if (bestSuit) {
+      const suitCards = groups[bestSuit];
+      if (suitCards.length >= 3) return suitCards[suitCards.length - 2]; // second-lowest
+      return pickLowest(suitCards);
+    }
+    return pickLowest(pool);
+  }
+
+  // Only spades — lead lowest to avoid winning
+  return pickLowest(validCards);
+}
+
 // --- FOLLOWING ---
 
 function botFollow(hand, currentTrick, ctx) {
@@ -657,6 +752,13 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
   // Partner is nil: special handling
   if (ctx.partnerIsNil) {
     return discardWhenPartnerNil(hand, spades, nonSpade, currentTrick, ledSuit, currentWinner, ctx);
+  }
+
+  // Desperation book-dump: NEVER trump — let opponents take the trick
+  // Shed our highest cards to avoid accidentally winning future tricks
+  if (ctx.desperateBookDump) {
+    if (nonSpade.length > 0) return pickHighest(nonSpade);
+    return pickLowest(hand); // only spades left — shed lowest
   }
 
   // Never trump partner's winning card (with exceptions)
