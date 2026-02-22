@@ -6,9 +6,9 @@ const sections = [
     title: 'The Basics',
     content: (
       <>
-        <p>Spades is a <strong>4-player trick-taking game</strong> played in teams of 2. Partners sit across from each other at the table.</p>
-        <p>The entire deck is dealt out — each player gets <strong>13 cards</strong>. You'll play 13 tricks per round, and the team that reaches the target score first wins.</p>
-        <p>Spades are always trump, meaning any spade beats any card of another suit.</p>
+        <p>Spades is a <strong>trick-taking card game</strong> where the goal is to accurately predict how many tricks you'll win each round. Spades are always trump — any spade beats any card of another suit.</p>
+        <p>The standard game is <strong>4 players in 2 teams of 2</strong>. Partners sit across from each other. The full 52-card deck is dealt evenly — 13 cards each, 13 tricks per round.</p>
+        <p>The first team to reach the target score (default <strong>500</strong>) wins.</p>
       </>
     ),
   },
@@ -17,11 +17,10 @@ const sections = [
     title: 'Bidding',
     content: (
       <>
-        <p>Before playing, each player looks at their hand and <strong>bids</strong> how many tricks they think they can win (1-13). Your team's bids are combined.</p>
-        <p>Bid what you think you can take. Overbidding risks getting <em>set</em> (losing points). Underbidding earns extra tricks called <em>books</em> — but too many books is bad.</p>
+        <p>Before playing, each player looks at their hand and <strong>bids</strong> how many tricks they think they can win (1-13). Your team's bids are combined into a team bid.</p>
+        <p>Bid what you think you can take. Overbidding risks getting <em>set</em> (losing points). Underbidding earns extra tricks called <em>books</em> — but accumulating too many books triggers a penalty.</p>
         <ul>
-          <li><strong>Nil bid</strong> — Bid 0 if you think you can avoid winning any tricks. Worth +100 if you pull it off, -100 if you take even one trick.</li>
-          <li>Your partner still bids and plays normally when you go nil.</li>
+          <li><strong>Nil bid</strong> — Bid 0 if you think you can avoid winning any tricks. Worth +100 if you pull it off, -100 if you take even one trick. Your partner still bids and plays normally.</li>
         </ul>
       </>
     ),
@@ -45,24 +44,24 @@ const sections = [
     title: 'Scoring',
     content: (
       <>
-        <p>After all 13 tricks are played, the round is scored:</p>
+        <p>After all tricks are played, the round is scored:</p>
         <table className="rules-table">
           <tbody>
             <tr>
               <td><strong>Made your bid</strong></td>
-              <td>+10 points per trick bid</td>
+              <td>+10 per trick bid</td>
             </tr>
             <tr>
               <td><strong>Got set</strong> (took fewer than bid)</td>
-              <td>-10 points per trick bid</td>
+              <td>-10 per trick bid</td>
             </tr>
             <tr>
               <td><strong>Books</strong> (overtricks)</td>
-              <td>+1 point each, but...</td>
+              <td>+1 each, but...</td>
             </tr>
             <tr>
-              <td><strong>10 books penalty</strong></td>
-              <td>-100 points when you hit 10 books</td>
+              <td><strong>Book penalty</strong></td>
+              <td>-100 at the threshold</td>
             </tr>
             <tr>
               <td><strong>Nil made</strong></td>
@@ -74,7 +73,7 @@ const sections = [
             </tr>
           </tbody>
         </table>
-        <p>Example: Your team bids 5, takes 7 tricks. You get 50 + 2 = <strong>52 points</strong>, and 2 books added to your count.</p>
+        <p>Example: Your team bids 5, takes 7 tricks = 50 + 2 = <strong>52 points</strong>, and 2 books added to your count.</p>
       </>
     ),
   },
@@ -84,18 +83,137 @@ const sections = [
     content: (
       <>
         <p>Books are the extra tricks you take beyond your bid. They're worth 1 point each, but they accumulate across rounds.</p>
-        <p>When your team hits <strong>10 books</strong>, you lose <strong>100 points</strong> and your book count resets. This makes sandbagging (intentionally underbidding) risky.</p>
+        <p>When your team hits the <strong>book threshold</strong> (default 10), you lose <strong>100 points</strong> and your count resets. This makes sandbagging (intentionally underbidding) risky.</p>
         <p>The book counter is shown on the scoreboard so you can keep track.</p>
       </>
     ),
   },
   {
-    id: 'winning',
-    title: 'Winning the Game',
+    id: 'modes',
+    title: 'Player Modes (3-8 Players)',
     content: (
       <>
-        <p>The default target score is <strong>500 points</strong> (adjustable in game settings). The first team to reach it wins.</p>
-        <p>If both teams cross the target in the same round, the team with the higher score wins.</p>
+        <p>This app supports <strong>3 to 8 players</strong>. The standard 4-player game is the default, but you can change the player count in the lobby settings.</p>
+
+        <div className="rules-mode-grid">
+          <div className="rules-mode-card">
+            <div className="rules-mode-header">
+              <strong>3 Players</strong>
+              <span className="rules-mode-tag">Free-for-all</span>
+            </div>
+            <p>3 solo players, no teams. 13 low cards are removed from the deck so each player still gets 13 cards. Every player bids and scores independently.</p>
+          </div>
+
+          <div className="rules-mode-card">
+            <div className="rules-mode-header">
+              <strong>4 Players</strong>
+              <span className="rules-mode-tag">Classic</span>
+            </div>
+            <p>Standard Spades. 2 teams of 2, partners sit across. Full 52-card deck, 13 cards each.</p>
+          </div>
+
+          <div className="rules-mode-card">
+            <div className="rules-mode-header">
+              <strong>5 Players</strong>
+              <span className="rules-mode-tag">2 teams + spoiler</span>
+            </div>
+            <p>2 pairs and 1 solo "spoiler." 13 mega cards are added to the deck so everyone gets 13 cards. The spoiler scores double on made bids and nils.</p>
+          </div>
+
+          <div className="rules-mode-card">
+            <div className="rules-mode-header">
+              <strong>6 Players</strong>
+              <span className="rules-mode-tag">3 teams of 2</span>
+            </div>
+            <p>3 pairs competing against each other. 26 mega cards added, 13 cards each. Partners sit across the table.</p>
+          </div>
+
+          <div className="rules-mode-card">
+            <div className="rules-mode-header">
+              <strong>7 Players</strong>
+              <span className="rules-mode-tag">3 teams + spoiler</span>
+            </div>
+            <p>3 pairs and 1 solo spoiler. 39 mega cards added, 13 cards each. Same spoiler rules as 5-player.</p>
+          </div>
+
+          <div className="rules-mode-card">
+            <div className="rules-mode-header">
+              <strong>8 Players</strong>
+              <span className="rules-mode-tag">4 teams of 2</span>
+            </div>
+            <p>4 pairs. 44 mega cards added but each player gets <strong>12 cards</strong> (12 tricks per round). Partners sit across.</p>
+          </div>
+        </div>
+      </>
+    ),
+  },
+  {
+    id: 'mega',
+    title: 'Mega Cards (5-8 Player)',
+    content: (
+      <>
+        <p>In 5-8 player modes, <strong>mega cards</strong> are added to the deck so there are enough cards for everyone. Mega cards look like regular cards but have a glowing border.</p>
+        <p>How they rank:</p>
+        <ul>
+          <li>A mega card <strong>beats the same rank</strong> regular card (mega 7 beats regular 7)</li>
+          <li>A mega card <strong>loses to the next rank up</strong> (mega 7 loses to regular 8)</li>
+          <li>There are no mega Aces — Aces remain the highest in each suit</li>
+        </ul>
+        <div className="rules-callout">
+          Think of mega cards as "half-ranks" — a mega 7 slots in between a regular 7 and a regular 8. Same follow-suit rules apply.
+        </div>
+      </>
+    ),
+  },
+  {
+    id: 'spoiler',
+    title: 'The Spoiler (5 & 7 Player)',
+    content: (
+      <>
+        <p>In 5 and 7-player games, one player is the <strong>spoiler</strong> — a solo player with no partner.</p>
+        <ul>
+          <li><strong>Double scoring:</strong> The spoiler earns double points on made bids (+20 per trick instead of +10) and double on successful nils (+200). Failed bids and nils are penalized at normal rates.</li>
+          <li><strong>No partner:</strong> The spoiler bids and plays alone. Nobody to cover for you or help make your bid.</li>
+          <li><strong>Same win condition:</strong> The spoiler wins by reaching the same score target as everyone else.</li>
+        </ul>
+        <p>The spoiler is a high-risk, high-reward position — bold bids pay off big, but mistakes hurt.</p>
+      </>
+    ),
+  },
+  {
+    id: 'settings',
+    title: 'Game Settings',
+    content: (
+      <>
+        <p>The room host can customize these before starting:</p>
+        <table className="rules-table">
+          <tbody>
+            <tr>
+              <td><strong>Players</strong></td>
+              <td>3-8 (changes the mode)</td>
+            </tr>
+            <tr>
+              <td><strong>Win Target</strong></td>
+              <td>100-1000 (default 500)</td>
+            </tr>
+            <tr>
+              <td><strong>Books for Penalty</strong></td>
+              <td>5-15 (default 10)</td>
+            </tr>
+            <tr>
+              <td><strong>Blind Nil</strong></td>
+              <td>Bid nil before seeing cards (+/-200)</td>
+            </tr>
+            <tr>
+              <td><strong>13-Bid Auto-Win</strong></td>
+              <td>Bid 13 and take all tricks to win instantly</td>
+            </tr>
+            <tr>
+              <td><strong>10-Trick Bonus</strong></td>
+              <td>+50 for bidding and taking 10+ tricks</td>
+            </tr>
+          </tbody>
+        </table>
       </>
     ),
   },
@@ -105,10 +223,10 @@ const sections = [
     content: (
       <>
         <ul>
-          <li><strong>Count your sure tricks</strong> — Aces and Kings of suits are reliable. Bid conservatively at first.</li>
-          <li><strong>Watch the books</strong> — If your team is at 7-8 books, try to take exactly your bid.</li>
-          <li><strong>Protect your partner's nil</strong> — If your partner bid nil, lead high cards to "eat" tricks before they're forced to win one.</li>
-          <li><strong>Pay attention to what's been played</strong> — If all the high spades are gone, your mid-spade is now a winner.</li>
+          <li><strong>Count your sure tricks</strong> — Aces and Kings are reliable. Bid conservatively at first.</li>
+          <li><strong>Watch the books</strong> — If your team is near the penalty threshold, try to take exactly your bid.</li>
+          <li><strong>Protect your partner's nil</strong> — Lead high cards to "eat" tricks before they're forced to win one.</li>
+          <li><strong>Pay attention to what's been played</strong> — If all the high spades are gone, your mid-spade is a winner.</li>
           <li><strong>Lead your short suits early</strong> — Run out of a suit so you can trump with spades later.</li>
           <li><strong>Don't be afraid of nil</strong> — If your hand is full of low cards, nil can be a big swing.</li>
         </ul>
@@ -125,9 +243,9 @@ const sections = [
           <li><strong>Bots</strong> can fill empty seats — the host can add/remove them in the lobby.</li>
           <li><strong>Drag players</strong> to assign teams in the lobby, or hit Randomize.</li>
           <li><strong>Queue a card</strong> — Click a card when it's not your turn to pre-select it. It auto-plays when your turn comes.</li>
-          <li><strong>AFK timer</strong> — 60 seconds to act. After 3 timeouts, you're auto-played faster. Any action (play, bid, chat) brings you back.</li>
-          <li><strong>Spectators</strong> — Extra players beyond 4 can watch the game live.</li>
-          <li><strong>Chat</strong> — Toggle the chat window with the button in the corner. Talk trash responsibly.</li>
+          <li><strong>AFK timer</strong> — 60 seconds to act. After 3 timeouts, you're auto-played faster. Any action brings you back.</li>
+          <li><strong>Spectators</strong> — Extra players beyond the mode's limit can watch live.</li>
+          <li><strong>Chat</strong> — Toggle the chat window with the button in the corner.</li>
         </ul>
       </>
     ),

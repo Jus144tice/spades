@@ -943,6 +943,44 @@ body {
   color: var(--text-primary);
 }
 
+.rules-mode-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.rules-mode-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.rules-mode-card p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.rules-mode-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rules-mode-header strong {
+  font-size: 13px;
+}
+
+.rules-mode-tag {
+  font-size: 10px;
+  color: var(--gold);
+  background: rgba(255, 215, 0, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
 /* Links row on join/lobby screens */
 .join-links {
   display: flex;
