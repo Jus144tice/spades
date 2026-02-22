@@ -141,7 +141,7 @@ const sections = [
               <strong>8 Players</strong>
               <span className="rules-mode-tag">4 teams of 2</span>
             </div>
-            <p>4 pairs. 44 mega cards added but each player gets <strong>12 cards</strong> (12 tricks per round). Partners sit across.</p>
+            <p>4 pairs. Full mega deck added (52 mega cards including Aces), 13 cards each. Partners sit across.</p>
           </div>
         </div>
       </>
@@ -157,7 +157,7 @@ const sections = [
         <ul>
           <li>A mega card <strong>beats the same rank</strong> regular card (mega 7 beats regular 7)</li>
           <li>A mega card <strong>loses to the next rank up</strong> (mega 7 loses to regular 8)</li>
-          <li>There are no mega Aces — Aces remain the highest in each suit</li>
+          <li>Most modes have no mega Aces — in 8-player, mega Aces are included (a mega Ace beats a regular Ace)</li>
         </ul>
         <div className="rules-callout">
           Think of mega cards as "half-ranks" — a mega 7 slots in between a regular 7 and a regular 8. Same follow-suit rules apply.

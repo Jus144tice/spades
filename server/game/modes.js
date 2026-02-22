@@ -7,7 +7,7 @@
 
 import { SUITS, RANKS } from './constants.js';
 
-// Mega cards never include Aces — Aces are high and shouldn't have mega variants.
+// Mega cards usually exclude Aces. 8-player needs a full mega deck (including Aces).
 const MEGA_RANKS = RANKS.filter(r => r !== 'A');
 
 // --- Deck building helpers ---
@@ -34,14 +34,16 @@ function computeRemovedCards(cardsToRemove) {
 
 /**
  * Compute which mega cards to ADD to the deck.
- * Fills rank-by-rank from 2 upward (never Aces), all 4 suits per rank,
+ * Fills rank-by-rank from 2 upward, all 4 suits per rank,
  * then partial suits in S, H, D, C order.
+ * By default excludes Aces; pass includeAces=true for a full mega deck (8-player).
  */
-function computeMegaCards(extraCardsNeeded) {
+function computeMegaCards(extraCardsNeeded, includeAces = false) {
   if (extraCardsNeeded <= 0) return [];
+  const ranks = includeAces ? RANKS : MEGA_RANKS;
   const mega = [];
   let remaining = extraCardsNeeded;
-  for (const rank of MEGA_RANKS) {
+  for (const rank of ranks) {
     if (remaining <= 0) break;
     for (const suit of SUITS) {
       if (remaining <= 0) break;
@@ -142,9 +144,9 @@ export const GAME_MODES = {
   },
   8: {
     playerCount: 8,
-    cardsPerPlayer: 12,
-    tricksPerRound: 12,
-    totalCards: 96,
+    cardsPerPlayer: 13,
+    tricksPerRound: 13,
+    totalCards: 104,
     teams: [
       { id: 'team1', size: 2, spoiler: false },
       { id: 'team2', size: 2, spoiler: false },
@@ -154,9 +156,9 @@ export const GAME_MODES = {
     teamCount: 4,
     hasSpoiler: false,
     seatingPattern: 'polygon',
-    // 52 regular + 44 mega (2-Q) = 96 = 12 per player. No mega Aces.
+    // 52 regular + 52 mega (full deck including Aces) = 104 = 13 per player.
     removedCards: [],
-    megaCards: computeMegaCards(44),
+    megaCards: computeMegaCards(52, true),
   },
 };
 

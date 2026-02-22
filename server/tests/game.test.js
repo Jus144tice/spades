@@ -72,7 +72,7 @@ describe('Game Modes', () => {
       5: { total: 65, perPlayer: 13, tricks: 13 },
       6: { total: 78, perPlayer: 13, tricks: 13 },
       7: { total: 91, perPlayer: 13, tricks: 13 },
-      8: { total: 96, perPlayer: 12, tricks: 12 },
+      8: { total: 104, perPlayer: 13, tricks: 13 },
     };
 
     for (const [n, exp] of Object.entries(expected)) {
@@ -135,14 +135,19 @@ describe('Game Modes', () => {
     });
   });
 
-  describe('No mega Aces', () => {
-    for (let n = 3; n <= 8; n++) {
+  describe('Mega Aces', () => {
+    for (let n = 3; n <= 7; n++) {
       it(`${n}p mode has no mega Aces`, () => {
         const mode = GAME_MODES[n];
         const megaAces = (mode.megaCards || []).filter(c => c.rank === 'A');
         assert.equal(megaAces.length, 0, `Mode ${n} should have no mega Aces`);
       });
     }
+    it('8p mode has mega Aces (full mega deck)', () => {
+      const mode = GAME_MODES[8];
+      const megaAces = (mode.megaCards || []).filter(c => c.rank === 'A');
+      assert.equal(megaAces.length, 4, '8p should have 4 mega Aces');
+    });
   });
 });
 
@@ -166,9 +171,13 @@ describe('Deck', () => {
       const unique = new Set(keys);
       assert.equal(unique.size, deck.length, `${n}p deck should have no duplicates`);
 
-      // No mega Aces in deck
+      // Only 8p has mega Aces
       const megaAces = deck.filter(c => c.mega && c.rank === 'A');
-      assert.equal(megaAces.length, 0, `${n}p deck should have no mega Aces`);
+      if (n === 8) {
+        assert.equal(megaAces.length, 4, '8p deck should have 4 mega Aces');
+      } else {
+        assert.equal(megaAces.length, 0, `${n}p deck should have no mega Aces`);
+      }
     });
   }
 
@@ -851,10 +860,12 @@ for (const n of [3, 5, 6, 7, 8]) {
         assert.equal(game.hands[pid].length, mode.cardsPerPlayer, `Each player should have ${mode.cardsPerPlayer} cards`);
       }
 
-      // No mega aces in any hand
-      for (const hand of Object.values(game.hands)) {
-        const megaAces = hand.filter(c => c.mega && c.rank === 'A');
-        assert.equal(megaAces.length, 0, 'No mega aces should be dealt');
+      // Only 8p should have mega aces
+      if (n !== 8) {
+        for (const hand of Object.values(game.hands)) {
+          const megaAces = hand.filter(c => c.mega && c.rank === 'A');
+          assert.equal(megaAces.length, 0, 'No mega aces should be dealt');
+        }
       }
     });
 
@@ -905,7 +916,7 @@ for (const n of [3, 5, 6, 7, 8]) {
       // High bookThreshold prevents book penalties from keeping scores negative
       const settings = { ...DEFAULT_GAME_SETTINGS, winTarget: 100, moonshot: false, tenBidBonus: false, bookThreshold: 100 };
       const game = new GameState(players, {}, settings);
-      // 8p: 12 tricks / 8 players → bid 1 to avoid sets; others: bid 2
+      // 8p: 13 tricks / 8 players → bid 1 so total bids (8) < tricks (13); others: bid 2
       const bidAmount = n >= 8 ? 1 : 2;
 
       let gameOver = false;

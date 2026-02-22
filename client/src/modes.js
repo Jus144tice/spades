@@ -112,7 +112,7 @@ export function getModeDescription(gameMode) {
     case 5: return '2 teams + 1 spoiler';
     case 6: return '3 teams of 2';
     case 7: return '3 teams + 1 spoiler';
-    case 8: return '4 teams of 2, 12 cards';
+    case 8: return '4 teams of 2';
     default: return '';
   }
 }
