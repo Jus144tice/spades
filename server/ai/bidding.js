@@ -73,6 +73,12 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
     }
   }
 
+  // Player-count scaling: more opponents = less reliable tricks
+  // Off-suit Aces get trumped more often, more ruffing competition, mega cards dilute spade strength
+  const playerCount = gameState.mode ? gameState.mode.playerCount : 4;
+  const playerScale = getPlayerCountScale(playerCount);
+  tricks *= playerScale;
+
   let bid = Math.round(tricks);
 
   // If partner bid nil, we need to cover
@@ -85,6 +91,17 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
   if (!desp.desperate && partnerBid !== undefined && partnerBid !== null && partnerBid > 0) {
     const combinedBid = bid + partnerBid;
     if (combinedBid > 10) {
+      bid = Math.max(1, bid - 1);
+    }
+  }
+
+  // Total bid awareness: if all known bids + ours exceed available tricks, trim back
+  if (!desp.desperate && playerCount > 4) {
+    const knownBids = (opponentBids || []).reduce((sum, b) => sum + (b || 0), 0)
+      + (partnerBid !== undefined && partnerBid !== null ? partnerBid : 0);
+    const totalWithOurs = knownBids + bid;
+    if (totalWithOurs > 13 + 2) {
+      // Overbid by more than 2 across all players — trim conservatively
       bid = Math.max(1, bid - 1);
     }
   }
@@ -473,6 +490,22 @@ function evaluateNil(hand, sortedSpades, spades, suits, partnerBid, desp) {
   }
 
   return lowCards >= 8 && highCards === 0 && highestSpade <= 9;
+}
+
+// Scale trick estimates by player count.
+// More opponents means off-suit honors get trumped more often,
+// more competition for ruffing, and mega cards dilute spade strength.
+// 3p: slightly aggressive (fewer opponents). 4p: baseline. 5-8p: increasingly conservative.
+function getPlayerCountScale(playerCount) {
+  switch (playerCount) {
+    case 3: return 1.05;
+    case 4: return 1.0;
+    case 5: return 0.88;
+    case 6: return 0.8;
+    case 7: return 0.73;
+    case 8: return 0.68;
+    default: return 1.0;
+  }
 }
 
 function countHighSpades(sortedSpades) {

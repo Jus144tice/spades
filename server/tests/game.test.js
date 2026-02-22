@@ -14,6 +14,7 @@ import { validatePlay, determineTrickWinner } from '../game/tricks.js';
 import { scoreRound, checkWinner } from '../game/scoring.js';
 import { GameState } from '../game/GameState.js';
 import { arrangeSeating } from '../lobby.js';
+import { botBid } from '../ai/bidding.js';
 
 // ===== CONSTANTS =====
 
@@ -682,6 +683,25 @@ function makeTestPlayers(n) {
   return arrangeSeating(players, mode);
 }
 
+// Get bid context from a GameState (mirrors getBidContext in socketHandlers)
+function getTestBidContext(game, playerId) {
+  const partnerIds = game.teamLookup.getPartnerIds(playerId);
+  const opponentIds = game.teamLookup.getOpponentIds(playerId);
+  return {
+    hand: game.hands[playerId],
+    partnerBid: partnerIds.length > 0 ? game.bids[partnerIds[0]] : undefined,
+    opponentBids: opponentIds.map(id => game.bids[id]),
+  };
+}
+
+// Use real bot AI to place a bid
+function placeBotBid(game) {
+  const pid = game.getCurrentTurnPlayerId();
+  const ctx = getTestBidContext(game, pid);
+  const bid = botBid(ctx.hand, ctx.partnerBid, ctx.opponentBids, game, pid);
+  return game.placeBid(pid, bid);
+}
+
 describe('GameState - 4 Player', () => {
   it('initializes correctly', () => {
     const players = makeTestPlayers(4);
@@ -783,8 +803,7 @@ describe('GameState - 4 Player', () => {
       safety++;
 
       if (game.phase === 'bidding') {
-        const pid = game.getCurrentTurnPlayerId();
-        game.placeBid(pid, 3);
+        placeBotBid(game);
       } else if (game.phase === 'playing') {
         const pid = game.getCurrentTurnPlayerId();
         const hand = game.hands[pid];
@@ -916,8 +935,6 @@ for (const n of [3, 5, 6, 7, 8]) {
       // High bookThreshold prevents book penalties from keeping scores negative
       const settings = { ...DEFAULT_GAME_SETTINGS, winTarget: 100, moonshot: false, tenBidBonus: false, bookThreshold: 100 };
       const game = new GameState(players, {}, settings);
-      // 8p: 13 tricks / 8 players → bid 1 so total bids (8) < tricks (13); others: bid 2
-      const bidAmount = n >= 8 ? 1 : 2;
 
       let gameOver = false;
       let safety = 0;
@@ -926,7 +943,7 @@ for (const n of [3, 5, 6, 7, 8]) {
         safety++;
 
         if (game.phase === 'bidding') {
-          game.placeBid(game.getCurrentTurnPlayerId(), bidAmount);
+          placeBotBid(game);
         } else if (game.phase === 'playing') {
           const pid = game.getCurrentTurnPlayerId();
           const hand = game.hands[pid];
