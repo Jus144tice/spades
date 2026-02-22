@@ -63,6 +63,18 @@ export function botPlayCard(hand, gameState, botId) {
     rawCardsPlayed: gameState.cardsPlayed || [],
   };
 
+  // Accumulated books from prior rounds — needed for disposition and play decisions
+  ctx.teamAccumulatedBooks = 0;
+  ctx.bookThreshold = 10;
+  if (gameState.books && teamLookup) {
+    const teamKey = teamLookup.getTeamKey(botId);
+    ctx.teamAccumulatedBooks = gameState.books[teamKey] || 0;
+  }
+  if (gameState.settings && gameState.settings.bookThreshold) {
+    ctx.bookThreshold = gameState.settings.bookThreshold;
+  }
+  ctx.booksBudget = ctx.bookThreshold - ctx.teamAccumulatedBooks;
+
   // Calculate our duck/set disposition and estimate opponent's
   ctx.disposition = calculateDisposition(hand, ctx);
   ctx.oppDisposition = estimateOpponentDisposition(currentTrick, ctx);
@@ -167,11 +179,12 @@ export function botPlayCard(hand, gameState, botId) {
   if (needMore && !bidSafelyMade && !ctx.desperateSet && !ctx.desperateBookDump) {
     if (botStillNeeds > 0) {
       const personalBuffer = ctx.tricksRemaining - botStillNeeds;
-      if (personalBuffer <= 1) {
-        // Tight — every trick matters, can't afford to duck
+      // Near book penalty: only override duck when absolutely no room
+      const tightThreshold = ctx.booksBudget <= 3 ? 0 : 1;
+      if (personalBuffer <= tightThreshold) {
         ctx.duckMode = false;
       }
-      // With buffer >= 2, leave duckMode as disposition set it — play selectively
+      // With more buffer, leave duckMode as disposition set it — play selectively
     } else if (ctx.tricksRemaining > 0) {
       // Bot made its bid, partner still needs — trust partner
       // Only step in if partner is clearly struggling
@@ -828,8 +841,8 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
     if (ctx.canGuaranteeBid && ctx.duckMode) {
       // Can guarantee bid but ducking — don't trump (save for guaranteed wins later)
       if (nonSpade.length > 0) return pickHighest(nonSpade);
-      // Only spades: dump lowest (save high spades for guaranteed tricks)
-      return pickLowest(hand);
+      // Only spades: dump highest now so future leads are lower
+      return forcedTrumpCard(spades, currentTrick);
     }
 
     if (ctx.canGuaranteeBid && ctx.setMode) {
@@ -846,7 +859,8 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
     if (ctx.botStillNeeds <= 0 && buffer >= 2) {
       // Bot made its bid, partner still needs — don't trump, let partner handle it
       if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
-      return pickLowest(hand);
+      // Only spades: dump highest now so future leads are lower
+      return forcedTrumpCard(spades, currentTrick);
     }
 
     // Normal: trump to win
@@ -882,8 +896,8 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
 
   // Neutral or duck: don't trump, shed cards based on disposition
   if (nonSpade.length > 0) return pickByDisposition(nonSpade, disp);
-  // Only spades left — dump lowest to minimize winning future tricks
-  return pickLowest(hand);
+  // Only spades left — dump highest to shed dangerous cards, preserve low for future
+  return forcedTrumpCard(spades, currentTrick);
 }
 
 // Extracted: discard logic when partner bid nil
@@ -935,6 +949,23 @@ function trumpBeatersHigh(spades, currentTrick) {
   if (beatingSpades.length > 0) return pickHighest(beatingSpades);
   if (currentHighTrump === 0 && spades.length > 0) return pickHighest(spades);
   return null;
+}
+
+// When void in led suit and only have spades, decide how to play.
+// If we can duck under an existing trump, play the highest card that ducks.
+// If we're going to win no matter what, dump our highest to shed it.
+function forcedTrumpCard(spades, currentTrick) {
+  const existingTrumps = currentTrick.filter(t => t.card.suit === 'S');
+  if (existingTrumps.length > 0) {
+    const highestTrump = Math.max(...existingTrumps.map(t => getCardValue(t.card)));
+    const duckers = spades.filter(c => getCardValue(c) < highestTrump);
+    if (duckers.length > 0) {
+      // Can duck under existing trump — play highest ducker to shed dangerous card
+      return pickHighest(duckers);
+    }
+  }
+  // Going to win regardless — dump highest to preserve lower spades for future
+  return pickHighest(spades);
 }
 
 // Smart discard: what to shed depends on disposition strength

@@ -22,14 +22,26 @@ export function calculateDisposition(hand, ctx) {
   else disposition = -2; // 5+ free = heavy duck
 
   // If opponents already made their bid, can't set them — duck to avoid books
+  const bothMade = ctx.oppTricks >= ctx.oppBid && ctx.teamTricks >= ctx.teamBid;
   if (ctx.oppTricks >= ctx.oppBid) {
-    // If WE also made, hard duck — both teams made means pure book avoidance
-    if (ctx.teamTricks >= ctx.teamBid) {
+    if (bothMade) {
       disposition = Math.min(disposition, -2);
     } else {
       // Opponents made but we haven't — focus on making, not setting
       disposition = Math.min(disposition, -1);
     }
+  }
+
+  // Accumulated books from prior rounds — approach penalty with caution
+  const accBooks = ctx.teamAccumulatedBooks || 0;
+  const bookThreshold = ctx.bookThreshold || 10;
+  const booksToThreshold = bookThreshold - accBooks;
+  if (booksToThreshold <= 3) {
+    disposition -= 2;
+  } else if (booksToThreshold <= 5) {
+    disposition -= 1.5;
+  } else if (booksToThreshold <= 7) {
+    disposition -= 1;
   }
 
   // DYNAMIC: track remaining free tricks as round progresses
@@ -67,17 +79,24 @@ export function calculateDisposition(hand, ctx) {
 
   // Look at current overtrick trajectory
   const teamBooks = Math.max(0, ctx.teamTricks - ctx.teamBid);
-  if (teamBooks >= 2) {
-    // Already have books - might as well play aggressively
-    disposition += 1;
-  } else if (teamBooks >= 1 && ctx.oppTricks < ctx.oppBid) {
-    disposition += 0.5;
+  if (bothMade) {
+    // Both teams made — every additional trick is a book, duck harder
+    if (teamBooks >= 1) {
+      disposition -= 0.5;
+    }
+  } else {
+    // Only one team made (or neither) — in-round books imply set opportunity
+    if (teamBooks >= 2) {
+      disposition += 1;
+    } else if (teamBooks >= 1 && ctx.oppTricks < ctx.oppBid) {
+      disposition += 0.5;
+    }
   }
 
   // Project guaranteed future winners (books we know are coming)
   const guaranteedFutureWins = countGuaranteedWinners(hand, ctx.memory);
   const projectedBooks = teamBooks + guaranteedFutureWins;
-  if (ctx.teamTricks >= ctx.teamBid && projectedBooks >= 2) {
+  if (!bothMade && ctx.teamTricks >= ctx.teamBid && projectedBooks >= 2) {
     disposition += 1;
   }
 
