@@ -36,6 +36,29 @@ export function pickMiddleCard(cards) {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
+// Graduated card selection based on disposition strength.
+// Hard set (>=2):  shed lowest, save highs for winning
+// Soft set (1-2):  shed second-lowest, keep absolute lowest as insurance
+// Neutral (-1..1): shed upper-mid cards that might accidentally win
+// Soft duck (-2..-1): shed second-highest, keep absolute highest as insurance
+// Hard duck (<=-2): shed highest, dump all potential winners
+export function pickByDisposition(cards, disposition) {
+  if (cards.length <= 1) return cards[0];
+  const sorted = [...cards].sort((a, b) => getCardValue(a) - getCardValue(b));
+  const n = sorted.length;
+
+  if (disposition >= 2) return sorted[0];                         // hard set: lowest
+  if (disposition <= -2) return sorted[n - 1];                    // hard duck: highest
+  if (n === 2) return disposition > 0 ? sorted[0] : sorted[1];   // 2 cards: lean by direction
+
+  if (disposition >= 1) return sorted[1];                         // soft set: second-lowest
+  if (disposition <= -1) return sorted[n - 2];                    // soft duck: second-highest
+
+  // Neutral: upper-mid (shed cards that might accidentally take tricks)
+  const idx = Math.floor(n * 0.65);
+  return sorted[Math.min(idx, n - 1)];
+}
+
 // Pick the top card from the shortest suit among candidates.
 // Leading highest first (A before K before Q) signals strength to partner.
 export function pickTopFromShortestSuit(candidates, hand) {

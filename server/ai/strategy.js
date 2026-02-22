@@ -1,5 +1,5 @@
 import { RANK_VALUE, getCardValue } from '../game/constants.js';
-import { pickHighest, pickLowest, pickMiddleCard, getEffectiveValue } from './helpers.js';
+import { pickHighest, pickLowest, pickMiddleCard, pickByDisposition, getEffectiveValue } from './helpers.js';
 import { countGuaranteedWinners, isMasterCard } from './memory.js';
 
 // --- DISPOSITION SYSTEM ---
@@ -209,26 +209,19 @@ function readPartnerSignals(ctx) {
 }
 
 // Signal disposition through card choice when following suit.
-// High card = "I have strength, consider set mode"
-// Low card = "I'm ducking, avoid books"
+// Graduated: hard set → shed lowest, soft set → second-lowest,
+// neutral → upper-mid, soft duck → second-highest, hard duck → highest
 export function signalWithFollow(cardsOfSuit, winningValue, ctx) {
   const underCards = cardsOfSuit.filter(c => getCardValue(c) < winningValue);
   const playableCards = underCards.length > 0 ? underCards : cardsOfSuit;
 
   if (playableCards.length <= 1) return playableCards[0] || cardsOfSuit[0];
 
-  if (ctx.disposition > 0 || ctx.setMode) {
-    return pickHighest(playableCards);
-  } else if (ctx.disposition < 0 || ctx.duckMode) {
-    return pickLowest(playableCards);
-  }
-
-  return pickMiddleCard(playableCards) || pickLowest(playableCards);
+  return pickByDisposition(playableCards, ctx.disposition || 0);
 }
 
 // When ducking with multiple options, signal disposition with card choice
 export function signalDuck(underCards, ctx) {
   if (underCards.length <= 1) return underCards[0];
-  if (ctx.disposition > 0 || ctx.setMode) return pickHighest(underCards);
-  return pickLowest(underCards);
+  return pickByDisposition(underCards, ctx.disposition || 0);
 }
