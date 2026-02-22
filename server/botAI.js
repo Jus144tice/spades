@@ -195,6 +195,16 @@ export function botPlayCard(hand, gameState, botId) {
     }
   }
 
+  // Set achieved: opponents can't make their bid and ours is safe — duck to avoid books
+  if ((ctx.setMode || ctx.desperateSet) && !needMore) {
+    const oppStillNeeds = Math.max(0, oppBid - oppTricks);
+    if (oppStillNeeds > ctx.tricksRemaining) {
+      ctx.setMode = false;
+      ctx.desperateSet = false;
+      ctx.duckMode = true;
+    }
+  }
+
   if (currentTrick.length === 0) {
     return botLead(hand, ctx);
   } else {
