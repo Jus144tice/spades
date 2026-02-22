@@ -27,6 +27,10 @@ export default function LobbyScreen() {
     socket.emit('add_bot');
   };
 
+  const handleFillWithBots = () => {
+    socket.emit('fill_with_bots');
+  };
+
   const handleRemoveBot = (botId) => {
     socket.emit('remove_bot', { botId });
   };
@@ -63,6 +67,11 @@ export default function LobbyScreen() {
         {canAddBot && (
           <button className="btn btn-secondary" onClick={handleAddBot}>
             + Add Bot
+          </button>
+        )}
+        {canAddBot && (
+          <button className="btn btn-secondary" onClick={handleFillWithBots}>
+            Fill with Bots
           </button>
         )}
         {state.isHost && (

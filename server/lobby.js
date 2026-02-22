@@ -144,6 +144,16 @@ export function addBot(lobbyCode) {
   return { player, lobby };
 }
 
+export function fillWithBots(lobbyCode) {
+  const added = [];
+  while (true) {
+    const result = addBot(lobbyCode);
+    if (result.error) break;
+    added.push(result.player);
+  }
+  return { added, lobby: lobbies.get(lobbyCode) };
+}
+
 export function removeBot(lobbyCode, botId) {
   const lobby = lobbies.get(lobbyCode);
   if (!lobby) return { error: 'Lobby not found' };

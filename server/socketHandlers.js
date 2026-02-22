@@ -1,7 +1,7 @@
 import {
   createLobby, joinLobby, leaveLobby, getLobby, getPlayerInfo,
   addChatMessage, assignTeam, autoAssignTeams, canStartGame,
-  arrangeSeating, addBot, removeBot, updatePlayerSocket, updateGameSettings,
+  arrangeSeating, addBot, fillWithBots, removeBot, updatePlayerSocket, updateGameSettings,
   getRoomList, fillSeat, fillSeatWithBot,
 } from './lobby.js';
 import { GameState } from './game/GameState.js';
@@ -179,6 +179,24 @@ export function registerHandlers(io, socket) {
       } catch (err) {
         console.error('add_bot error:', err);
         socket.emit('error_msg', { message: 'Failed to add bot' });
+      }
+    });
+  });
+
+  socket.on('fill_with_bots', () => {
+    requireHost(socket, 'fill with bots', (info) => {
+      try {
+        const result = fillWithBots(info.lobbyCode);
+        for (const bot of result.added) {
+          const joinData = { player: bot, players: result.lobby.players };
+          io.to(info.lobbyCode).emit('player_joined', joinData);
+
+          const msg = addChatMessage(info.lobbyCode, null, `${bot.name} (Bot) joined the room`);
+          io.to(info.lobbyCode).emit('chat_message', msg);
+        }
+      } catch (err) {
+        console.error('fill_with_bots error:', err);
+        socket.emit('error_msg', { message: 'Failed to fill with bots' });
       }
     });
   });

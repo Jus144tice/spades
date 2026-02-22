@@ -11,9 +11,10 @@ import PlayerSeat from '../components/PlayerSeat.jsx';
 import { getTricksPerRound, getSeatPosition } from '../modes.js';
 
 export default function GameScreen() {
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const socket = useSocket();
   const [queuedCard, setQueuedCard] = useState(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const queuedCardRef = useRef(null);
   queuedCardRef.current = queuedCard;
 
@@ -265,6 +266,28 @@ export default function GameScreen() {
             {!state.isHost && !isSpectator && (
               <p className="pause-hint">Waiting for the room owner to fill seats...</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Leave room button — hidden during pause and game over */}
+      {!state.gamePaused && !state.gameOverData && (
+        <button className="leave-room-btn" onClick={() => setShowLeaveConfirm(true)}>
+          Leave Room
+        </button>
+      )}
+
+      {/* Leave confirmation dialog */}
+      {showLeaveConfirm && (
+        <div className="leave-confirm-overlay" onClick={() => setShowLeaveConfirm(false)}>
+          <div className="leave-confirm-dialog" onClick={e => e.stopPropagation()}>
+            <p>Leave this game? The game will be paused until your seat is filled.</p>
+            <div className="leave-confirm-actions">
+              <button className="btn btn-ghost" onClick={() => setShowLeaveConfirm(false)}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => { socket.emit('leave_lobby'); dispatch({ type: 'LEAVE' }); }}>
+                Leave Game
+              </button>
+            </div>
           </div>
         </div>
       )}
