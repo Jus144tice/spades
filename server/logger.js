@@ -1,5 +1,5 @@
 function timestamp() {
-  return new Date().toISOString();
+  return new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false });
 }
 
 export const log = (...args) => console.log(`[${timestamp()}]`, ...args);
