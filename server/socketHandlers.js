@@ -16,6 +16,7 @@ import {
   getAfkState, getPlayerAfk, getPlayerTimeout, resetPlayerAfk, incrementAfk,
   clearTurnTimer, clearRoundTimers, cleanupAfkState, remapPlayerAfk,
 } from './afkManager.js';
+import { log, error } from './logger.js';
 
 // Delay range for bot actions (ms) — feels more natural
 const BOT_DELAY_MIN = 800;
@@ -177,7 +178,7 @@ export function registerHandlers(io, socket) {
         const msg = addChatMessage(info.lobbyCode, null, `${result.player.name} (Bot) joined the room`);
         io.to(info.lobbyCode).emit('chat_message', msg);
       } catch (err) {
-        console.error('add_bot error:', err);
+        error('add_bot error:', err);
         socket.emit('error_msg', { message: 'Failed to add bot' });
       }
     });
@@ -195,7 +196,7 @@ export function registerHandlers(io, socket) {
           io.to(info.lobbyCode).emit('chat_message', msg);
         }
       } catch (err) {
-        console.error('fill_with_bots error:', err);
+        error('fill_with_bots error:', err);
         socket.emit('error_msg', { message: 'Failed to fill with bots' });
       }
     });
@@ -300,7 +301,7 @@ export function registerHandlers(io, socket) {
           }
         }
       } catch (err) {
-        console.error('Failed to fetch player preferences:', err);
+        error('Failed to fetch player preferences:', err);
       }
     }
 
@@ -410,7 +411,7 @@ export function registerHandlers(io, socket) {
     remapPlayerAfk(lobbyCode, oldSocketId, socket.id);
 
     socket.join(lobbyCode);
-    console.log(`Player ${player.name} rejoined (${oldSocketId} -> ${socket.id})`);
+    log(`Player ${player.name} rejoined (${oldSocketId} -> ${socket.id})`);
 
     const msg = addChatMessage(lobbyCode, null, `${player.name} reconnected`);
     io.to(lobbyCode).emit('chat_message', msg);
@@ -585,7 +586,7 @@ export function registerHandlers(io, socket) {
     if (!info) return;
 
     if (socket.userId) {
-      console.log(`${info.playerName} disconnected, ${RECONNECT_GRACE_PERIOD / 1000}s grace period started`);
+      log(`${info.playerName} disconnected, ${RECONNECT_GRACE_PERIOD / 1000}s grace period started`);
 
       const timer = setTimeout(() => {
         disconnectTimers.delete(socket.id);
@@ -696,7 +697,7 @@ function handleRoundOver(io, lobbyCode, lobby, result) {
 
       if (!isSinglePlayerGame(lobbyCode)) {
         saveGameResults(lobby.game, winningTeam).catch(err => {
-          console.error('Failed to save game results:', err);
+          error('Failed to save game results:', err);
         });
       }
 
@@ -987,7 +988,7 @@ async function saveGameResults(game, winningTeam) {
     await updatePlayerStats(client, game, winningTeam);
 
     await client.query('COMMIT');
-    console.log(`Game ${gameId} saved to database`);
+    log(`Game ${gameId} saved to database`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

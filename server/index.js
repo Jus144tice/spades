@@ -12,6 +12,7 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
 import pool, { initDB } from './db/index.js';
+import { log, error } from './logger.js';
 import { registerHandlers } from './socketHandlers.js';
 import { validatePreferences, mergeWithDefaults, hasCompletedSetup, PRESETS, TABLE_COLORS, DEFAULTS } from './game/preferences.js';
 import { getPlayerStats, getLeaderboard, getModeLeaderboard, getPlayerModeStats } from './db/stats.js';
@@ -174,7 +175,7 @@ app.put('/api/preferences', async (req, res) => {
 
     res.json({ preferences: merged });
   } catch (err) {
-    console.error('Failed to update preferences:', err);
+    error('Failed to update preferences:', err);
     res.status(500).json({ error: 'Failed to update preferences' });
   }
 });
@@ -187,7 +188,7 @@ app.get('/api/stats/:userId', async (req, res) => {
     const stats = await getPlayerStats(pool, userId);
     res.json(stats);
   } catch (err) {
-    console.error('Stats query error:', err);
+    error('Stats query error:', err);
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
@@ -198,7 +199,7 @@ app.get('/api/leaderboard', async (req, res) => {
     const rows = await getLeaderboard(pool, sortBy);
     res.json(rows);
   } catch (err) {
-    console.error('Leaderboard query error:', err);
+    error('Leaderboard query error:', err);
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
@@ -219,7 +220,7 @@ app.get('/api/leaderboard/mode/:gameMode', async (req, res) => {
     });
     res.json(result);
   } catch (err) {
-    console.error('Mode leaderboard query error:', err);
+    error('Mode leaderboard query error:', err);
     res.status(500).json({ error: 'Failed to fetch mode leaderboard' });
   }
 });
@@ -244,7 +245,7 @@ app.get('/api/stats/:userId/mode/:gameMode', async (req, res) => {
       nilAttempts: 0, nilsMade: 0, totalTricksTaken: 0, avgBid: '0',
     });
   } catch (err) {
-    console.error('Mode stats query error:', err);
+    error('Mode stats query error:', err);
     res.status(500).json({ error: 'Failed to fetch mode stats' });
   }
 });
@@ -268,7 +269,7 @@ io.on('connection', (socket) => {
     // Deserialize user id is stored in session; attach it to socket
     socket.userId = user; // This is the serialized user id (integer)
   }
-  console.log(`Player connected: ${socket.id} (userId: ${socket.userId || 'guest'})`);
+  log(`Player connected: ${socket.id} (userId: ${socket.userId || 'guest'})`);
   registerHandlers(io, socket);
 });
 
@@ -280,6 +281,14 @@ app.get('/api/health', async (req, res) => {
   } catch {
     res.status(503).json({ status: 'error', message: 'database unreachable' });
   }
+});
+
+// --- CSRF error handler (clean 403 instead of stack traces) ---
+app.use((err, req, res, next) => {
+  if (err.code === 'EBADCSRFTOKEN' || err.message === 'invalid csrf token') {
+    return res.status(403).json({ error: 'Invalid or missing CSRF token' });
+  }
+  next(err);
 });
 
 // Serve built client in production
@@ -297,7 +306,7 @@ async function start() {
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`Port ${PORT} is in use. Killing the old process...`);
+      error(`Port ${PORT} is in use. Killing the old process...`);
       import('child_process').then(({ execSync }) => {
         try {
           // Find and kill the process on the port (Windows)
@@ -305,26 +314,26 @@ async function start() {
           const pid = result.trim().split(/\s+/).pop();
           if (pid && pid !== '0') {
             execSync(`taskkill /PID ${pid} /F`, { encoding: 'utf-8' });
-            console.log(`Killed PID ${pid}. Retrying...`);
+            log(`Killed PID ${pid}. Retrying...`);
             setTimeout(() => server.listen(PORT), 1000);
           }
         } catch {
-          console.error(`Could not free port ${PORT}. Kill the process manually.`);
+          error(`Could not free port ${PORT}. Kill the process manually.`);
           process.exit(1);
         }
       });
     } else {
-      console.error('Server error:', err);
+      error('Server error:', err);
       process.exit(1);
     }
   });
 
   server.listen(PORT, () => {
-    console.log(`Spades server running on port ${PORT}`);
+    log(`Spades server running on port ${PORT}`);
   });
 }
 
 start().catch(err => {
-  console.error('Failed to start server:', err);
+  error('Failed to start server:', err);
   process.exit(1);
 });
