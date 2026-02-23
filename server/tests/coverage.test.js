@@ -1598,4 +1598,105 @@ describe('GameState - Round Integrity', () => {
   });
 });
 
+// ===== GUEST PLAYER SUPPORT =====
+// These tests lock in the server-side contracts that make "Play as Guest" work.
+// Guest players have userId = null throughout the system.
+
+describe('Guest player - Lobby', () => {
+  it('createLobby accepts null userId for guest', () => {
+    const sid = uniqueSocket();
+    const lobby = createLobby(sid, 'GuestPlayer', null);
+    assert.ok(lobby.code);
+    assert.equal(lobby.players[0].name, 'GuestPlayer');
+    assert.equal(lobby.players[0].userId, null);
+    leaveLobby(sid);
+  });
+
+  it('createLobby accepts undefined userId for guest', () => {
+    const sid = uniqueSocket();
+    const lobby = createLobby(sid, 'GuestPlayer');
+    assert.equal(lobby.players[0].userId, null);
+    leaveLobby(sid);
+  });
+
+  it('joinLobby accepts null userId for guest', () => {
+    const host = uniqueSocket();
+    const lobby = createLobby(host, 'Host', 'user-host');
+    const guest = uniqueSocket();
+    const result = joinLobby(guest, 'GuestJoiner', lobby.code, null);
+    assert.ok(!result.error);
+    const guestPlayer = result.lobby.players.find(p => p.name === 'GuestJoiner');
+    assert.equal(guestPlayer.userId, null);
+    leaveLobby(guest);
+    leaveLobby(host);
+  });
+
+  it('guest and authenticated player coexist in same lobby', () => {
+    const host = uniqueSocket();
+    const lobby = createLobby(host, 'AuthUser', 'user-42');
+    const guest = uniqueSocket();
+    joinLobby(guest, 'GuestBob', lobby.code, null);
+    const updated = getLobby(lobby.code);
+    assert.equal(updated.players.length, 2);
+    assert.equal(updated.players[0].userId, 'user-42');
+    assert.equal(updated.players[1].userId, null);
+    leaveLobby(guest);
+    leaveLobby(host);
+  });
+});
+
+describe('Guest player - Stats skip', () => {
+  it('updatePlayerStats skips players with null userId', async () => {
+    // Mock a minimal game with a guest player and a bot
+    const queriesMade = [];
+    const mockClient = {
+      query: async (sql, params) => {
+        queriesMade.push({ sql, params });
+        return { rows: [] };
+      },
+    };
+    const fakeGame = {
+      players: [
+        { id: 's1', name: 'Guest', userId: null, team: 1, seatIndex: 0, isBot: false },
+        { id: 's2', name: 'Bot', userId: null, team: 2, seatIndex: 1, isBot: true },
+      ],
+      teamLookup: { getPartnerIds: () => [] },
+      roundHistory: [],
+    };
+    // Import dynamically to avoid top-level import issues
+    const { updatePlayerStats } = await import('../db/stats.js');
+    await updatePlayerStats(mockClient, fakeGame, 'team1');
+    // No DB queries should have been made — both players are skipped
+    assert.equal(queriesMade.length, 0, 'No stats queries for guest or bot players');
+  });
+
+  it('updatePlayerStats processes authenticated player but skips guest', async () => {
+    const queriesMade = [];
+    const mockClient = {
+      query: async (sql, params) => {
+        queriesMade.push({ sql, params });
+        return { rows: [{}] };
+      },
+    };
+    const fakeGame = {
+      players: [
+        { id: 's1', name: 'AuthUser', userId: 42, team: 1, seatIndex: 0, isBot: false },
+        { id: 's2', name: 'GuestUser', userId: null, team: 1, seatIndex: 1, isBot: false },
+      ],
+      teamLookup: { getPartnerIds: () => [] },
+      roundHistory: [],
+      scores: { team1: 100 },
+    };
+    const { updatePlayerStats } = await import('../db/stats.js');
+    await updatePlayerStats(mockClient, fakeGame, 'team1');
+    // Only the authenticated player should have a stats query
+    assert.ok(queriesMade.length > 0, 'Should have queries for authenticated player');
+    // Verify the userId in the query params belongs to the authenticated player
+    const userIds = queriesMade.flatMap(q => q.params).filter(p => p === 42);
+    assert.ok(userIds.length > 0, 'Queries reference authenticated userId');
+    const guestIds = queriesMade.flatMap(q => q.params).filter(p => p === null);
+    assert.equal(guestIds.length, 0, 'No queries reference null userId');
+  });
+});
+
 console.log('Coverage test suites defined. Running...');

@@ -27,7 +27,22 @@ export function AuthProvider({ children }) {
     window.location.href = '/auth/google';
   };
 
+  const loginAsGuest = () => {
+    setUser({
+      id: null,
+      displayName: 'Guest',
+      avatarUrl: null,
+      isGuest: true,
+      preferences: { cardSort: 'C,D,S,H:asc', tableColor: '#0f1923' },
+      hasCompletedSetup: true,
+    });
+  };
+
   const logout = async () => {
+    if (user?.isGuest) {
+      setUser(null);
+      return;
+    }
     await fetch('/auth/logout', {
       method: 'POST',
       headers: { 'X-CSRF-Token': csrfToken },
@@ -37,7 +52,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginAsGuest, logout }}>
       {children}
     </AuthContext.Provider>
   );

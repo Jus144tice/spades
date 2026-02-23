@@ -27,7 +27,7 @@ function useIsMobile() {
 }
 
 function LoginScreen() {
-  const { login } = useAuth();
+  const { login, loginAsGuest } = useAuth();
 
   return (
     <div className="join-screen">
@@ -37,6 +37,9 @@ function LoginScreen() {
         <div className="join-buttons">
           <button className="btn btn-primary" onClick={login}>
             Sign in with Google
+          </button>
+          <button className="btn btn-secondary" onClick={loginAsGuest}>
+            Play as Guest
           </button>
         </div>
       </div>

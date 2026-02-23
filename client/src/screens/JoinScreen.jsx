@@ -8,7 +8,7 @@ export default function JoinScreen() {
   const socket = useSocket();
   const { state, dispatch } = useGame();
   const { user, logout } = useAuth();
-  const [name, setName] = useState(user?.displayName || '');
+  const [name, setName] = useState(user?.isGuest ? '' : (user?.displayName || ''));
   const [code, setCode] = useState('');
   const [mode, setMode] = useState(null); // null, 'create', 'join', 'browse'
   const [stats, setStats] = useState(null);
@@ -28,7 +28,7 @@ export default function JoinScreen() {
     return () => socket.emit('leave_room_browser');
   }, [socket]);
 
-  const playerName = name.trim() || user?.displayName || 'Player';
+  const playerName = name.trim() || (user?.isGuest ? '' : user?.displayName) || 'Player';
 
   const handleCreate = () => {
     if (!playerName) return;
@@ -55,19 +55,28 @@ export default function JoinScreen() {
         <p className="join-subtitle">Get your squad together</p>
 
         <div className="join-user-info">
-          <div className="join-user-row">
-            {user?.avatarUrl && (
-              <img src={user.avatarUrl} alt="" className="join-avatar" referrerPolicy="no-referrer" />
-            )}
-            <span className="join-user-name">{user?.displayName}</span>
-            <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
-          </div>
-          {stats && stats.gamesPlayed > 0 && (
-            <div className="join-stats">
-              {stats.gamesPlayed} games &middot; {stats.gamesWon}W / {stats.gamesLost}L
-              {stats.winRate > 0 && <> &middot; {stats.winRate}%</>}
-              {stats.currentWinStreak > 1 && <> &middot; {stats.currentWinStreak} streak</>}
+          {user?.isGuest ? (
+            <div className="join-user-row">
+              <span className="join-user-name">Playing as Guest</span>
+              <button className="btn btn-ghost btn-sm" onClick={logout}>Back to Login</button>
             </div>
+          ) : (
+            <>
+              <div className="join-user-row">
+                {user?.avatarUrl && (
+                  <img src={user.avatarUrl} alt="" className="join-avatar" referrerPolicy="no-referrer" />
+                )}
+                <span className="join-user-name">{user?.displayName}</span>
+                <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
+              </div>
+              {stats && stats.gamesPlayed > 0 && (
+                <div className="join-stats">
+                  {stats.gamesPlayed} games &middot; {stats.gamesWon}W / {stats.gamesLost}L
+                  {stats.winRate > 0 && <> &middot; {stats.winRate}%</>}
+                  {stats.currentWinStreak > 1 && <> &middot; {stats.currentWinStreak} streak</>}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -78,7 +87,7 @@ export default function JoinScreen() {
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder={user?.displayName || 'Enter your name'}
+              placeholder={user?.isGuest ? 'Pick a name' : (user?.displayName || 'Enter your name')}
               maxLength={12}
               onKeyDown={e => {
                 if (e.key === 'Enter' && mode === 'join') handleJoin();

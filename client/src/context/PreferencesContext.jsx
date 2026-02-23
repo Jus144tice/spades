@@ -27,6 +27,14 @@ export function PreferencesProvider({ children }) {
   }, [user]);
 
   const updatePreferences = useCallback(async (newPrefs) => {
+    // Guests: update local state only (no DB persistence)
+    if (user?.isGuest) {
+      const merged = { ...(preferences || {}), ...newPrefs };
+      setPreferences(merged);
+      setSetupDone(true);
+      applyTableColor(merged.tableColor);
+      return merged;
+    }
     try {
       const res = await fetch('/api/preferences', {
         method: 'PUT',
@@ -43,7 +51,7 @@ export function PreferencesProvider({ children }) {
       console.error('Failed to update preferences:', err);
       throw err;
     }
-  }, []);
+  }, [user, preferences]);
 
   return (
     <PreferencesContext.Provider value={{ preferences, updatePreferences, loading, hasCompletedSetup: setupDone }}>
