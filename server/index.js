@@ -272,6 +272,16 @@ io.on('connection', (socket) => {
   registerHandlers(io, socket);
 });
 
+// --- Health check (for uptime monitors) ---
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', uptime: process.uptime() });
+  } catch {
+    res.status(503).json({ status: 'error', message: 'database unreachable' });
+  }
+});
+
 // Serve built client in production
 app.use(express.static(join(__dirname, '..', 'client', 'dist')));
 
