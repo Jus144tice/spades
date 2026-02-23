@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { useSocket } from './SocketContext.jsx';
 
-const GameContext = createContext(null);
+export const GameContext = createContext(null);
 
 const TRICK_DISPLAY_DELAY = 1500; // ms to show completed trick before clearing
 
-const initialState = {
+export const initialState = {
   screen: 'join',
   playerId: null,
   playerName: '',
@@ -45,7 +45,7 @@ const initialState = {
   mode: null,
 };
 
-function gameReducer(state, action) {
+export function gameReducer(state, action) {
   switch (action.type) {
     case 'SET_NAME':
       return { ...state, playerName: action.name };

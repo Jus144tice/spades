@@ -1,25 +1,11 @@
 import React, { useState } from 'react';
 import Card, { CardBack } from './Card.jsx';
+import { isLegalPlay as checkLegalPlay } from '../gameUtils.js';
 
 export default function Hand({ cards, onPlayCard, isMyTurn, currentTrick, spadesBroken, queuedCard, onQueueCard, canQueue, showBacks, phase }) {
   const [touchedIndex, setTouchedIndex] = useState(null);
 
-  const isLegalPlay = (card) => {
-    // Leading
-    if (currentTrick.length === 0) {
-      if (card.suit === 'S' && !spadesBroken) {
-        return cards.every(c => c.suit === 'S');
-      }
-      return true;
-    }
-
-    // Must follow suit
-    const ledSuit = currentTrick[0].card.suit;
-    const hasLedSuit = cards.some(c => c.suit === ledSuit);
-    if (hasLedSuit) return card.suit === ledSuit;
-
-    return true;
-  };
+  const isLegalPlay = (card) => checkLegalPlay(card, cards, currentTrick, spadesBroken);
 
   const canPlayCard = (card) => isMyTurn && isLegalPlay(card);
   const canQueueCard = (card) => canQueue && isLegalPlay(card);

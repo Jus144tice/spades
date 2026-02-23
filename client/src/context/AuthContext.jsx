@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 // Module-level CSRF token storage
 let csrfToken = '';

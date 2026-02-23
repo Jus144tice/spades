@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth, getCsrfToken } from './AuthContext.jsx';
 
-const PreferencesContext = createContext(null);
+export const PreferencesContext = createContext(null);
 
 export function PreferencesProvider({ children }) {
   const { user } = useAuth();
