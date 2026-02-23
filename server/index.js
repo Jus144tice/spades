@@ -274,7 +274,7 @@ io.on('connection', (socket) => {
 // Serve built client in production
 app.use(express.static(join(__dirname, '..', 'client', 'dist')));
 
-app.get('*', (req, res) => {
+app.get('{*path}', (req, res) => {
   res.sendFile(join(__dirname, '..', 'client', 'dist', 'index.html'));
 });
 
