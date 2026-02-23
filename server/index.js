@@ -54,8 +54,9 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // --- CSRF protection (double-submit cookie) ---
-const { generateToken, doubleCsrfProtection } = doubleCsrf({
+const { generateCsrfToken: generateToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.SESSION_SECRET,
+  getSessionIdentifier: (req) => req.session?.id || '',
   cookieName: 'csrf',
   cookieOptions: {
     httpOnly: true,
