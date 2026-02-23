@@ -150,6 +150,12 @@
   margin-left: 8px;
 }
 
+.share-btn {
+  margin-left: 12px;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
 .player-count {
   font-size: 14px;
   color: var(--text-secondary);

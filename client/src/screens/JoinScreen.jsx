@@ -9,8 +9,14 @@ export default function JoinScreen() {
   const { state, dispatch } = useGame();
   const { user, logout } = useAuth();
   const [name, setName] = useState(user?.isGuest ? '' : (user?.displayName || ''));
-  const [code, setCode] = useState('');
-  const [mode, setMode] = useState(null); // null, 'create', 'join', 'browse'
+  // Check for invite link: ?join=CODE
+  const inviteCode = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('join')?.toUpperCase() || '';
+  })();
+
+  const [code, setCode] = useState(inviteCode);
+  const [mode, setMode] = useState(inviteCode ? 'join' : null);
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -21,6 +27,13 @@ export default function JoinScreen() {
         .catch(() => {});
     }
   }, [user?.id]);
+
+  // Clean invite code from URL after reading it
+  useEffect(() => {
+    if (inviteCode) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [inviteCode]);
 
   // Subscribe to room list updates while on this screen
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useGame } from '../context/GameContext.jsx';
 import TeamPicker from '../components/TeamPicker.jsx';
@@ -7,6 +7,7 @@ import GameSettingsPanel from '../components/GameSettingsPanel.jsx';
 export default function LobbyScreen() {
   const socket = useSocket();
   const { state, dispatch } = useGame();
+  const [copied, setCopied] = useState(false);
 
   const gameMode = state.gameSettings?.gameMode || 4;
 
@@ -50,6 +51,18 @@ export default function LobbyScreen() {
         <h2>Lobby</h2>
         <div className="lobby-code">
           Room Code: <span className="code">{state.lobbyCode}</span>
+          <button
+            className="btn btn-ghost btn-sm share-btn"
+            onClick={() => {
+              const url = `${window.location.origin}?join=${state.lobbyCode}`;
+              navigator.clipboard.writeText(url).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+          >
+            {copied ? 'Copied!' : 'Copy Link'}
+          </button>
         </div>
       </div>
 
