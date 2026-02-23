@@ -1130,14 +1130,14 @@ describe('Bot Bidding', () => {
     assert.ok(bid <= 2, `Expected bid <= 2 but got ${bid}`);
   });
 
-  it('bid is always in range 1-13', () => {
+  it('bid is always in range 0-13 (0 = nil)', () => {
     // Test with various random hands
     for (let trial = 0; trial < 10; trial++) {
       const deck = shuffle(createDeck());
       const hand = deck.slice(0, 13);
       const gs = makeMinimalGameState(4);
       const bid = botBid(hand, undefined, [], gs, 'p1');
-      assert.ok(bid >= 1 && bid <= 13, `Bid ${bid} out of range`);
+      assert.ok(bid >= 0 && bid <= 13, `Bid ${bid} out of range`);
     }
   });
 
