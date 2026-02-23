@@ -67,7 +67,7 @@ describe('Middleware stack smoke test', () => {
       secret: SECRET,
       resave: false,
       saveUninitialized: true, // true for testing (no real store)
-      cookie: { secure: false },
+      cookie: { secure: process.env.NODE_ENV === 'production' },
     }));
     app.use(express.json());
     app.use(cookieParser(SECRET));
