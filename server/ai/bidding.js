@@ -54,9 +54,19 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
         }
       }
     } else if (topVal === 13) {
-      if (len === 1) tricks += 0.3;
-      else if (len === 2) tricks += 0.4;
-      else tricks += 0.5;
+      // K without Ace: value depends on protection (Queen) and suit length
+      // Long suits = more forced follows = K more likely to run into the Ace
+      const hasQueen = len >= 2 && RANK_VALUE[sorted[1].rank] === 12;
+      if (len === 1) {
+        tricks += 0.3;
+      } else if (len === 2) {
+        tricks += hasQueen ? 0.5 : 0.3;  // K,Q = solid; K,x = unprotected
+      } else if (len === 3) {
+        tricks += hasQueen ? 0.5 : 0.4;
+      } else {
+        // 4+ cards: K gets buried in long suit, less reliable even with Q
+        tricks += hasQueen ? 0.4 : 0.3;
+      }
     } else if (topVal === 12 && len >= 3) {
       tricks += 0.2;
     }
@@ -101,6 +111,12 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
   const playerCount = gameState.mode ? gameState.mode.playerCount : 4;
   const playerScale = getPlayerCountScale(playerCount);
   tricks *= playerScale;
+
+  // Partner bid 1 = weak hand that couldn't nil. Their trick isn't guaranteed —
+  // we may need to cover it, so lower our own estimate slightly.
+  if (partnerBid === 1) {
+    tricks -= 0.5;
+  }
 
   let bid = Math.round(tricks);
 
@@ -467,13 +483,22 @@ function evaluateNil(hand, sortedSpades, spades, suits, partnerBid, desp) {
     const medCards = hand.filter(c => RANK_VALUE[c.rank] >= 10 && RANK_VALUE[c.rank] <= 11).length;
     if (highCards + medCards >= 5) return false;
 
-    // Aces in off-suits are dangerous but allow one if suit is short
+    // Aces in off-suits are dangerous but allow one if suit is short or deeply buried
     let dangerousAces = 0;
     for (const [suitKey, suitCards] of Object.entries(suits)) {
       if (suitCards.length === 0) continue;
       const sorted = [...suitCards].sort((a, b) => getCardValue(b) - getCardValue(a));
-      if (RANK_VALUE[sorted[0].rank] === 14 && suitCards.length <= 1) dangerousAces++;
-      else if (RANK_VALUE[sorted[0].rank] === 14) return false; // Ace with length = stuck with it
+      if (RANK_VALUE[sorted[0].rank] === 14) {
+        // Buried Ace: enough low cards to duck under repeatedly
+        const lowInSuit = suitCards.filter(c => RANK_VALUE[c.rank] <= 7).length;
+        if (suitCards.length >= 4 && lowInSuit >= 3) {
+          dangerousAces++;  // risky but not automatic reject
+        } else if (suitCards.length <= 1) {
+          dangerousAces++;
+        } else {
+          return false; // Ace with medium length = stuck with it
+        }
+      }
     }
     if (dangerousAces >= 2) return false;
 
@@ -498,7 +523,13 @@ function evaluateNil(hand, sortedSpades, spades, suits, partnerBid, desp) {
   for (const [suitKey, suitCards] of Object.entries(suits)) {
     if (suitCards.length === 0) continue;
     const sorted = [...suitCards].sort((a, b) => getCardValue(b) - getCardValue(a));
-    if (RANK_VALUE[sorted[0].rank] === 14) return false;
+    if (RANK_VALUE[sorted[0].rank] === 14) {
+      // Ace buried in 5+ cards with lots of low cover: duckable enough for nil
+      // Nil (+100) is worth way more than bid 1 (+10), so consider it
+      const lowInSuit = suitCards.filter(c => RANK_VALUE[c.rank] <= 7).length;
+      if (suitCards.length >= 5 && lowInSuit >= 4) continue;
+      return false;
+    }
     if (RANK_VALUE[sorted[0].rank] === 13 && suitCards.length <= 2) return false;
   }
 
