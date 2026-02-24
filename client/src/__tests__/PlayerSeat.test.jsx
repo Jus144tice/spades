@@ -86,4 +86,18 @@ describe('PlayerSeat', () => {
     expect(screen.getByText('Vacant')).toBeInTheDocument();
     expect(screen.getByText('Waiting for player...')).toBeInTheDocument();
   });
+
+  it('shows disconnect overlay when disconnectedInfo is provided', () => {
+    const disconnectedInfo = { name: 'Alice', graceDeadline: Date.now() + 30000 };
+    render(<PlayerSeat player={basePlayer} disconnectedInfo={disconnectedInfo} />);
+    expect(screen.getByText('Reconnecting...')).toBeInTheDocument();
+    expect(screen.getByText('!')).toBeInTheDocument();
+  });
+
+  it('hides AFK badge when disconnected', () => {
+    const disconnectedInfo = { name: 'Alice', graceDeadline: Date.now() + 30000 };
+    render(<PlayerSeat player={basePlayer} isAfk disconnectedInfo={disconnectedInfo} />);
+    expect(screen.queryByText('AFK')).toBeNull();
+    expect(screen.getByText('Reconnecting...')).toBeInTheDocument();
+  });
 });

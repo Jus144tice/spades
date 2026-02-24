@@ -521,6 +521,69 @@ describe('gameReducer', () => {
     });
   });
 
+  describe('completedTricks', () => {
+    it('TRICK_WON appends completedTrick to completedTricks', () => {
+      const ct = { trickNumber: 1, trick: [{ playerId: 'p1', card: { suit: 'H', rank: 'A' } }], winnerId: 'p1', leaderId: 'p1' };
+      const result = reduce({ type: 'TRICK_WON', data: { winnerId: 'p1', tricksTaken: { p1: 1 }, completedTrick: ct } });
+      expect(result.completedTricks).toHaveLength(1);
+      expect(result.completedTricks[0]).toEqual(ct);
+    });
+
+    it('NEW_ROUND clears completedTricks', () => {
+      const state = { ...initialState, completedTricks: [{ trickNumber: 1 }] };
+      const result = reduce({ type: 'NEW_ROUND', data: { phase: 'bidding', hand: [], tricksTaken: {}, currentTurnId: 'p1', dealerIndex: 0, roundNumber: 2 } }, state);
+      expect(result.completedTricks).toEqual([]);
+    });
+
+    it('GAME_STARTED clears completedTricks', () => {
+      const state = { ...initialState, completedTricks: [{ trickNumber: 1 }] };
+      const result = reduce({ type: 'GAME_STARTED', data: { phase: 'bidding', hand: [], bids: {}, currentTrick: [], tricksTaken: {}, scores: {}, books: {}, currentTurnId: 'p1', dealerIndex: 0, spadesBroken: false, roundNumber: 1, players: [], roundHistory: [], playerCount: 4 } }, state);
+      expect(result.completedTricks).toEqual([]);
+    });
+
+    it('GAME_STATE_SYNC restores completedTricks', () => {
+      const tricks = [{ trickNumber: 1, winnerId: 'p1' }];
+      const result = reduce({ type: 'GAME_STATE_SYNC', data: { phase: 'playing', hand: [], bids: {}, currentTrick: [], tricksTaken: {}, scores: {}, books: {}, currentTurnId: 'p1', dealerIndex: 0, spadesBroken: false, roundNumber: 1, roundHistory: [], players: [], completedTricks: tricks, playerCount: 4 } });
+      expect(result.completedTricks).toEqual(tricks);
+    });
+
+    it('RETURNED_TO_LOBBY clears completedTricks', () => {
+      const state = { ...initialState, completedTricks: [{ trickNumber: 1 }] };
+      const result = reduce({ type: 'RETURNED_TO_LOBBY', data: { players: [] } }, state);
+      expect(result.completedTricks).toEqual([]);
+    });
+  });
+
+  describe('disconnect/reconnect', () => {
+    it('PLAYER_DISCONNECTED adds to disconnectedPlayers', () => {
+      const result = reduce({ type: 'PLAYER_DISCONNECTED', data: { playerId: 'p1', playerName: 'Alice', graceDeadline: 9999 } });
+      expect(result.disconnectedPlayers).toEqual({ p1: { name: 'Alice', graceDeadline: 9999 } });
+    });
+
+    it('PLAYER_RECONNECTED removes from disconnectedPlayers', () => {
+      const state = { ...initialState, disconnectedPlayers: { p1: { name: 'Alice', graceDeadline: 9999 } } };
+      const result = reduce({ type: 'PLAYER_RECONNECTED', data: { playerId: 'p1', playerName: 'Alice' } }, state);
+      expect(result.disconnectedPlayers).toEqual({});
+    });
+
+    it('GAME_PAUSED clears disconnectedPlayers', () => {
+      const state = { ...initialState, disconnectedPlayers: { p1: { name: 'Alice', graceDeadline: 9999 } } };
+      const result = reduce({ type: 'GAME_PAUSED', data: { vacantSeats: [] } }, state);
+      expect(result.disconnectedPlayers).toEqual({});
+    });
+
+    it('REJOIN_SUCCESS (game) sets justRejoined to true', () => {
+      const result = reduce({ type: 'REJOIN_SUCCESS', data: { screen: 'game', playerId: 'p1', lobbyCode: 'ABCD', players: [], isHost: false, phase: 'playing', hand: [], bids: {}, currentTrick: [], tricksTaken: {}, scores: {}, books: {}, currentTurnId: 'p1', dealerIndex: 0, spadesBroken: false, roundNumber: 1, roundHistory: [] } });
+      expect(result.justRejoined).toBe(true);
+    });
+
+    it('CLEAR_REJOIN_BANNER sets justRejoined to false', () => {
+      const state = { ...initialState, justRejoined: true };
+      const result = reduce({ type: 'CLEAR_REJOIN_BANNER' }, state);
+      expect(result.justRejoined).toBe(false);
+    });
+  });
+
   describe('default', () => {
     it('returns state unchanged for unknown action', () => {
       const state = { ...initialState, playerName: 'Alice' };

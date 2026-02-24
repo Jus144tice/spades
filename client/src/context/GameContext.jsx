@@ -43,6 +43,9 @@ export const initialState = {
   vacantSeats: [],
   playerCount: 4,
   mode: null,
+  completedTricks: [],
+  disconnectedPlayers: {},
+  justRejoined: false,
   isPrivate: false,
   locked: false,
 };
@@ -101,6 +104,7 @@ export function gameReducer(state, action) {
           vacantSeats: action.data.vacantSeats || [],
           playerCount: action.data.gameState.playerCount || action.data.players.length,
           mode: action.data.gameState.mode || null,
+          completedTricks: action.data.gameState.completedTricks || [],
           isPrivate: action.data.isPrivate || false,
           locked: action.data.locked || false,
         };
@@ -181,6 +185,8 @@ export function gameReducer(state, action) {
         cardsRevealed: false,
         playerCount: action.data.playerCount || action.data.players.length,
         mode: action.data.mode || null,
+        completedTricks: [],
+        disconnectedPlayers: {},
       };
 
     case 'BID_PLACED': {
@@ -223,6 +229,9 @@ export function gameReducer(state, action) {
         tricksTaken: action.data.tricksTaken,
         lastTrickWinner: action.data.winnerId,
         trickWonPending: true,
+        completedTricks: action.data.completedTrick
+          ? [...state.completedTricks, action.data.completedTrick]
+          : state.completedTricks,
       };
 
     case 'CLEAR_TRICK':
@@ -262,6 +271,7 @@ export function gameReducer(state, action) {
         turnTimer: null,
         blindNilPlayers: [],
         cardsRevealed: false,
+        completedTricks: [],
       };
 
     case 'GAME_OVER':
@@ -292,6 +302,8 @@ export function gameReducer(state, action) {
         cardsRevealed: false,
         gamePaused: false,
         vacantSeats: [],
+        completedTricks: [],
+        disconnectedPlayers: {},
       };
 
     case 'ERROR':
@@ -311,6 +323,24 @@ export function gameReducer(state, action) {
 
     case 'ROOM_UPDATED':
       return { ...state, isPrivate: action.data.isPrivate, locked: action.data.locked };
+
+    case 'PLAYER_DISCONNECTED': {
+      const newDisconnected = { ...state.disconnectedPlayers };
+      newDisconnected[action.data.playerId] = {
+        name: action.data.playerName,
+        graceDeadline: action.data.graceDeadline,
+      };
+      return { ...state, disconnectedPlayers: newDisconnected };
+    }
+
+    case 'PLAYER_RECONNECTED': {
+      const newDisconnected = { ...state.disconnectedPlayers };
+      delete newDisconnected[action.data.playerId];
+      return { ...state, disconnectedPlayers: newDisconnected };
+    }
+
+    case 'CLEAR_REJOIN_BANNER':
+      return { ...state, justRejoined: false };
 
     case 'TURN_TIMER':
       return { ...state, turnTimer: { playerId: action.data.playerId, endsAt: action.data.endsAt } };
@@ -332,7 +362,7 @@ export function gameReducer(state, action) {
       return { ...state, roomList: action.data };
 
     case 'GAME_PAUSED':
-      return { ...state, gamePaused: true, vacantSeats: action.data.vacantSeats };
+      return { ...state, gamePaused: true, vacantSeats: action.data.vacantSeats, disconnectedPlayers: {} };
 
     case 'GAME_RESUMED':
       return { ...state, gamePaused: false, vacantSeats: [] };
@@ -366,6 +396,7 @@ export function gameReducer(state, action) {
         vacantSeats: [],
         playerCount: action.data.playerCount || action.data.players.length,
         mode: action.data.mode || null,
+        completedTricks: action.data.completedTricks || [],
       };
 
     case 'LEAVE':
@@ -416,6 +447,8 @@ export function gameReducer(state, action) {
           vacantSeats: d.vacantSeats || [],
           playerCount: d.playerCount || d.players.length,
           mode: d.mode || null,
+          completedTricks: d.completedTricks || [],
+          justRejoined: true,
         };
       }
       // Lobby rejoin
@@ -485,6 +518,8 @@ export function GameProvider({ children }) {
       game_resumed: () => dispatch({ type: 'GAME_RESUMED' }),
       seat_filled: (data) => dispatch({ type: 'SEAT_FILLED', data }),
       game_state_sync: (data) => dispatch({ type: 'GAME_STATE_SYNC', data }),
+      player_disconnected: (data) => dispatch({ type: 'PLAYER_DISCONNECTED', data }),
+      player_reconnected: (data) => dispatch({ type: 'PLAYER_RECONNECTED', data }),
     };
 
     for (const [event, handler] of Object.entries(handlers)) {

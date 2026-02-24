@@ -445,7 +445,7 @@ export function registerHandlers(io, socket) {
 
     const msg = addChatMessage(lobbyCode, null, `${player.name} reconnected`);
     io.to(lobbyCode).emit('chat_message', msg);
-    io.to(lobbyCode).emit('player_reconnected', { playerId: socket.id });
+    io.to(lobbyCode).emit('player_reconnected', { playerId: socket.id, playerName: player.name });
 
     // If game is paused and this player has a vacant seat, auto-fill it
     if (lobby.game && lobby.paused) {
@@ -630,7 +630,11 @@ export function registerHandlers(io, socket) {
 
       const msg = addChatMessage(info.lobbyCode, null, `${info.playerName} lost connection...`);
       io.to(info.lobbyCode).emit('chat_message', msg);
-      io.to(info.lobbyCode).emit('player_disconnected', { playerId: socket.id });
+      io.to(info.lobbyCode).emit('player_disconnected', {
+        playerId: socket.id,
+        playerName: info.playerName,
+        graceDeadline: Date.now() + RECONNECT_GRACE_PERIOD,
+      });
       return;
     }
 
@@ -686,6 +690,12 @@ function processCardPlay(io, lobbyCode, playerId, card) {
       winnerId: result.winnerId,
       trick: result.trick,
       tricksTaken: lobby.game.tricksTaken,
+      completedTrick: {
+        trickNumber: lobby.game.tricksPlayed,
+        trick: result.trick.map(t => ({ playerId: t.playerId, card: t.card })),
+        winnerId: result.winnerId,
+        leaderId: result.trick[0].playerId,
+      },
     });
 
     if (result.roundOver) {

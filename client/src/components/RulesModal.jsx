@@ -263,7 +263,50 @@ function Section({ section, isOpen, onToggle }) {
   );
 }
 
-export default function RulesModal({ onClose }) {
+function RoomRulesCallout({ gameSettings }) {
+  if (!gameSettings) return null;
+
+  const defaults = {
+    gameMode: 4,
+    winTarget: 500,
+    bookThreshold: 10,
+    blindNil: false,
+    moonshot: true,
+    tenBidBonus: true,
+  };
+
+  const items = [
+    { label: 'Players', value: `${gameSettings.gameMode || 4}`, key: 'gameMode', defaultVal: defaults.gameMode },
+    { label: 'Win Target', value: `${gameSettings.winTarget}`, key: 'winTarget', defaultVal: defaults.winTarget },
+    { label: 'Books for Penalty', value: `${gameSettings.bookThreshold}`, key: 'bookThreshold', defaultVal: defaults.bookThreshold },
+    { label: 'Blind Nil', value: gameSettings.blindNil ? 'On' : 'Off', key: 'blindNil', defaultVal: defaults.blindNil },
+    { label: '13-Bid Auto-Win', value: gameSettings.moonshot ? 'On' : 'Off', key: 'moonshot', defaultVal: defaults.moonshot },
+    { label: '10-Trick Bonus', value: gameSettings.tenBidBonus ? 'On' : 'Off', key: 'tenBidBonus', defaultVal: defaults.tenBidBonus },
+  ];
+
+  return (
+    <div className="room-rules-callout">
+      <div className="room-rules-title">This Room's Settings</div>
+      <div className="room-rules-grid">
+        {items.map(item => {
+          const currentVal = gameSettings[item.key] ?? defaults[item.key];
+          const isNonDefault = currentVal !== item.defaultVal;
+          return (
+            <div key={item.key} className={`room-rules-item ${isNonDefault ? 'non-default' : ''}`}>
+              <span className="room-rules-label">{item.label}</span>
+              <span className="room-rules-value">
+                {item.value}
+                {isNonDefault && <span className="room-rules-default"> (default: {String(item.defaultVal)})</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function RulesModal({ onClose, gameSettings }) {
   const [openSections, setOpenSections] = useState({ basics: true });
 
   const toggle = (id) => {
@@ -282,6 +325,7 @@ export default function RulesModal({ onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal rules-modal" onClick={e => e.stopPropagation()}>
         <h2>How to Play Spades</h2>
+        {gameSettings && <RoomRulesCallout gameSettings={gameSettings} />}
         <div className="rules-expand-controls">
           <button className="rules-expand-btn" onClick={expandAll}>Expand all</button>
           <span className="rules-expand-divider">&middot;</span>

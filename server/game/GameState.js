@@ -32,6 +32,7 @@ export class GameState {
     this.roundHistory = [];
     this.tricksPlayed = 0;
     this.cardsPlayed = []; // All cards played this round (for bot card memory)
+    this.completedTricks = [];
 
     this.startNewRound();
   }
@@ -46,6 +47,7 @@ export class GameState {
     this.spadesBroken = false;
     this.tricksPlayed = 0;
     this.cardsPlayed = [];
+    this.completedTricks = [];
 
     for (const p of this.players) {
       this.tricksTaken[p.id] = 0;
@@ -159,6 +161,12 @@ export class GameState {
       for (const play of completedTrick) {
         this.cardsPlayed.push({ playerId: play.playerId, card: play.card });
       }
+      this.completedTricks.push({
+        trickNumber: this.tricksPlayed,
+        trick: completedTrick.map(t => ({ playerId: t.playerId, card: t.card })),
+        winnerId,
+        leaderId: completedTrick[0].playerId,
+      });
       this.currentTrick = [];
 
       // All tricks done?
@@ -335,6 +343,13 @@ export class GameState {
     for (const c of this.cardsPlayed) {
       if (c.playerId === oldId) c.playerId = newId;
     }
+    for (const ct of this.completedTricks) {
+      if (ct.winnerId === oldId) ct.winnerId = newId;
+      if (ct.leaderId === oldId) ct.leaderId = newId;
+      for (const t of ct.trick) {
+        if (t.playerId === oldId) t.playerId = newId;
+      }
+    }
     if (this.blindNilPlayers.has(oldId)) {
       this.blindNilPlayers.delete(oldId);
       this.blindNilPlayers.add(newId);
@@ -363,6 +378,7 @@ export class GameState {
       roundHistory: this.roundHistory,
       players: this.players.map(p => ({ id: p.id, name: p.name, team: p.team, seatIndex: p.seatIndex, isBot: p.isBot || false })),
       gameSettings: this.settings,
+      completedTricks: this.completedTricks,
       blindNilPlayers: [...this.blindNilPlayers],
       playerCount: this.playerCount,
       mode: {

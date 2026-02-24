@@ -1087,4 +1087,123 @@ describe('N-Team Scoring', () => {
   }
 });
 
+describe('GameState - completedTricks', () => {
+  it('starts with empty completedTricks', () => {
+    const players = makeTestPlayers(4);
+    const game = new GameState(players, {}, DEFAULT_GAME_SETTINGS);
+    assert.deepStrictEqual(game.completedTricks, []);
+  });
+
+  it('populates completedTricks after each trick', () => {
+    const players = makeTestPlayers(4);
+    const game = new GameState(players, {}, { ...DEFAULT_GAME_SETTINGS, moonshot: false, tenBidBonus: false });
+
+    // Bid phase
+    for (let i = 0; i < 4; i++) {
+      game.placeBid(game.getCurrentTurnPlayerId(), 3);
+    }
+
+    // Play one trick (4 cards)
+    for (let card = 0; card < 4; card++) {
+      const pid = game.getCurrentTurnPlayerId();
+      const hand = game.hands[pid];
+      for (const c of hand) {
+        const result = game.playCard(pid, c);
+        if (!result.error) break;
+      }
+    }
+
+    assert.equal(game.completedTricks.length, 1);
+    const ct = game.completedTricks[0];
+    assert.equal(ct.trickNumber, 1);
+    assert.equal(ct.trick.length, 4);
+    assert.ok(ct.winnerId);
+    assert.ok(ct.leaderId);
+    // Each trick entry has playerId and card
+    for (const play of ct.trick) {
+      assert.ok(play.playerId);
+      assert.ok(play.card);
+      assert.ok(play.card.suit);
+      assert.ok(play.card.rank);
+    }
+  });
+
+  it('clears completedTricks on new round', () => {
+    const players = makeTestPlayers(4);
+    const game = new GameState(players, {}, { ...DEFAULT_GAME_SETTINGS, moonshot: false, tenBidBonus: false });
+
+    // Play a full round
+    for (let i = 0; i < 4; i++) {
+      game.placeBid(game.getCurrentTurnPlayerId(), 3);
+    }
+    for (let trick = 0; trick < 13; trick++) {
+      for (let card = 0; card < 4; card++) {
+        const pid = game.getCurrentTurnPlayerId();
+        for (const c of game.hands[pid]) {
+          const result = game.playCard(pid, c);
+          if (!result.error) break;
+        }
+      }
+    }
+
+    assert.equal(game.completedTricks.length, 13);
+
+    // Start new round (game auto-starts next round if not game over)
+    if (game.phase === 'bidding') {
+      assert.equal(game.completedTricks.length, 0, 'completedTricks should clear on new round');
+    }
+  });
+
+  it('includes completedTricks in getStateForPlayer', () => {
+    const players = makeTestPlayers(4);
+    const game = new GameState(players, {}, { ...DEFAULT_GAME_SETTINGS, moonshot: false, tenBidBonus: false });
+
+    // Bid and play one trick
+    for (let i = 0; i < 4; i++) {
+      game.placeBid(game.getCurrentTurnPlayerId(), 3);
+    }
+    for (let card = 0; card < 4; card++) {
+      const pid = game.getCurrentTurnPlayerId();
+      for (const c of game.hands[pid]) {
+        const result = game.playCard(pid, c);
+        if (!result.error) break;
+      }
+    }
+
+    const state = game.getStateForPlayer(players[0].id);
+    assert.ok(state.completedTricks);
+    assert.equal(state.completedTricks.length, 1);
+  });
+
+  it('remaps player IDs in completedTricks on replacePlayer', () => {
+    const players = makeTestPlayers(4);
+    const game = new GameState(players, {}, { ...DEFAULT_GAME_SETTINGS, moonshot: false, tenBidBonus: false });
+
+    // Bid and play one trick
+    for (let i = 0; i < 4; i++) {
+      game.placeBid(game.getCurrentTurnPlayerId(), 3);
+    }
+    for (let card = 0; card < 4; card++) {
+      const pid = game.getCurrentTurnPlayerId();
+      for (const c of game.hands[pid]) {
+        const result = game.playCard(pid, c);
+        if (!result.error) break;
+      }
+    }
+
+    const oldId = players[0].id;
+    const newId = 'new_player_1';
+    game.replacePlayer(oldId, newId, 'NewPlayer');
+
+    // Check completedTricks have remapped IDs
+    for (const ct of game.completedTricks) {
+      for (const play of ct.trick) {
+        assert.notEqual(play.playerId, oldId, 'Old player ID should be replaced in trick plays');
+      }
+      assert.notEqual(ct.winnerId, oldId, 'Old player ID should be replaced in winnerId');
+      assert.notEqual(ct.leaderId, oldId, 'Old player ID should be replaced in leaderId');
+    }
+  });
+});
+
 console.log('All test suites defined. Running...');

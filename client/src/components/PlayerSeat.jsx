@@ -22,7 +22,29 @@ function TurnCountdown({ endsAt }) {
   );
 }
 
-export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner, turnTimer, isAfk, isBlindNil, isVacant }) {
+function DisconnectCountdown({ graceDeadline }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => Math.max(0, Math.ceil((graceDeadline - Date.now()) / 1000)));
+
+  useEffect(() => {
+    setSecondsLeft(Math.max(0, Math.ceil((graceDeadline - Date.now()) / 1000)));
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((graceDeadline - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining <= 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [graceDeadline]);
+
+  return (
+    <div className="player-disconnected-overlay">
+      <div className="disconnect-icon">!</div>
+      <div className="disconnect-label">Reconnecting...</div>
+      <div className="disconnect-timer">{secondsLeft}s</div>
+    </div>
+  );
+}
+
+export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDealer, isMe, isLastTrickWinner, turnTimer, isAfk, isBlindNil, isVacant, disconnectedInfo }) {
   if (!player) return null;
 
   if (isVacant) {
@@ -49,7 +71,8 @@ export default function PlayerSeat({ player, bid, tricks, isCurrentTurn, isDeale
           <span className="dealer-chip-icon">D</span>
         </div>
       )}
-      {isAfk && <div className="afk-badge">AFK</div>}
+      {disconnectedInfo && <DisconnectCountdown graceDeadline={disconnectedInfo.graceDeadline} />}
+      {isAfk && !disconnectedInfo && <div className="afk-badge">AFK</div>}
       <div className="player-seat-name">
         {player.name}
       </div>

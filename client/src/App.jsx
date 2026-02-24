@@ -47,9 +47,24 @@ function LoginScreen() {
   );
 }
 
+function RejoinBanner({ dispatch }) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      dispatch({ type: 'CLEAR_REJOIN_BANNER' });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [dispatch]);
+
+  return (
+    <div className="rejoin-banner">
+      Welcome back! You're all caught up.
+    </div>
+  );
+}
+
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const { hasCompletedSetup, loading: prefsLoading } = usePreferences();
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -151,7 +166,18 @@ function AppContent() {
       </button>
       {leaderboardOpen && <LeaderboardModal onClose={() => setLeaderboardOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
-      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
+      {state.screen === 'game' && (
+        <button
+          className={`rules-game-btn ${chatOpen && !isMobile ? 'chat-shifted' : ''}`}
+          onClick={() => setRulesOpen(true)}
+          aria-label="Rules"
+          title="Game Rules"
+        >
+          ?
+        </button>
+      )}
+      {state.justRejoined && <RejoinBanner dispatch={dispatch} />}
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} gameSettings={state.screen === 'game' ? state.gameSettings : null} />}
       {state.reconnecting && (
         <div className="reconnecting-overlay">
           <div className="reconnecting-content">

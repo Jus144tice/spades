@@ -8,6 +8,7 @@ import BidPanel from '../components/BidPanel.jsx';
 import GameOverModal from '../components/GameOverModal.jsx';
 import RoundSummaryModal from '../components/RoundSummaryModal.jsx';
 import PlayerSeat from '../components/PlayerSeat.jsx';
+import TrickHistory from '../components/TrickHistory.jsx';
 import { getTricksPerRound, getSeatPosition } from '../modes.js';
 
 export default function GameScreen() {
@@ -15,6 +16,7 @@ export default function GameScreen() {
   const socket = useSocket();
   const [queuedCard, setQueuedCard] = useState(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showTrickHistory, setShowTrickHistory] = useState(false);
   const queuedCardRef = useRef(null);
   queuedCardRef.current = queuedCard;
 
@@ -53,6 +55,7 @@ export default function GameScreen() {
     isAfk: !!state.afkPlayers[player?.id],
     isBlindNil: state.blindNilPlayers?.includes(player?.id),
     isVacant: isSeatVacant(player),
+    disconnectedInfo: state.disconnectedPlayers[player?.id],
     ...extraProps,
   });
 
@@ -113,6 +116,8 @@ export default function GameScreen() {
           myIndex={myIndex}
           playerCount={playerCount}
           lastTrickWinner={state.lastTrickWinner}
+          completedTricks={state.completedTricks}
+          onShowHistory={() => setShowTrickHistory(true)}
         />
 
         {/* Right opponent */}
@@ -173,6 +178,8 @@ export default function GameScreen() {
           lastTrickWinner={state.lastTrickWinner}
           layoutSeats={layoutSeats}
           mySeatIndex={mySeatIndex}
+          completedTricks={state.completedTricks}
+          onShowHistory={() => setShowTrickHistory(true)}
         />
 
         {/* Bottom seat (me) */}
@@ -290,6 +297,15 @@ export default function GameScreen() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Trick history overlay */}
+      {showTrickHistory && (
+        <TrickHistory
+          completedTricks={state.completedTricks}
+          players={state.players}
+          onClose={() => setShowTrickHistory(false)}
+        />
       )}
 
       {/* Round summary modal */}
