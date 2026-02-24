@@ -25,6 +25,15 @@ describe('gameReducer', () => {
       expect(result.reconnecting).toBe(false);
       expect(result.gameSettings).toEqual({ gameMode: 4 });
     });
+
+    it('carries isPrivate and locked from payload', () => {
+      const result = reduce({
+        type: 'LOBBY_CREATED',
+        data: { playerId: 'p1', lobbyCode: 'ABCD', players: [], gameSettings: {}, isPrivate: true, locked: true },
+      });
+      expect(result.isPrivate).toBe(true);
+      expect(result.locked).toBe(true);
+    });
   });
 
   describe('LOBBY_JOINED', () => {
@@ -65,6 +74,15 @@ describe('gameReducer', () => {
       expect(result.isSpectator).toBe(true);
       expect(result.phase).toBe('playing');
       expect(result.spadesBroken).toBe(true);
+    });
+
+    it('carries isPrivate and locked from payload', () => {
+      const result = reduce({
+        type: 'LOBBY_JOINED',
+        data: { playerId: 'p2', lobbyCode: 'ABCD', players: [], isHost: false, chatLog: [], isPrivate: true, locked: false },
+      });
+      expect(result.isPrivate).toBe(true);
+      expect(result.locked).toBe(false);
     });
   });
 
@@ -356,6 +374,21 @@ describe('gameReducer', () => {
       const settings = { gameMode: 6, winTarget: 300 };
       const result = reduce({ type: 'GAME_SETTINGS_UPDATED', data: settings });
       expect(result.gameSettings).toEqual(settings);
+    });
+  });
+
+  describe('ROOM_UPDATED', () => {
+    it('sets isPrivate and locked', () => {
+      const result = reduce({ type: 'ROOM_UPDATED', data: { isPrivate: true, locked: true } });
+      expect(result.isPrivate).toBe(true);
+      expect(result.locked).toBe(true);
+    });
+
+    it('can toggle back to public/unlocked', () => {
+      const state = { ...initialState, isPrivate: true, locked: true };
+      const result = reduce({ type: 'ROOM_UPDATED', data: { isPrivate: false, locked: false } }, state);
+      expect(result.isPrivate).toBe(false);
+      expect(result.locked).toBe(false);
     });
   });
 

@@ -64,6 +64,37 @@ export default function LobbyScreen() {
             {copied ? 'Copied!' : 'Copy Link'}
           </button>
         </div>
+        {state.isHost ? (
+          <div className="room-privacy-controls">
+            <div className="privacy-toggle">
+              <span className="privacy-label">Private</span>
+              <button
+                className={`settings-toggle ${state.isPrivate ? 'on' : ''}`}
+                onClick={() => socket.emit('set_room_private', { isPrivate: !state.isPrivate })}
+                title={state.isPrivate ? 'Only joinable by code/link' : 'Visible in room browser'}
+              >
+                <span className="toggle-knob"></span>
+              </button>
+            </div>
+            <div className="privacy-toggle">
+              <span className="privacy-label">Locked</span>
+              <button
+                className={`settings-toggle ${state.locked ? 'on' : ''}`}
+                onClick={() => socket.emit('set_room_locked', { locked: !state.locked })}
+                title={state.locked ? 'No new players can join' : 'Anyone with code can join'}
+              >
+                <span className="toggle-knob"></span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          (state.isPrivate || state.locked) && (
+            <div className="room-privacy-badges">
+              {state.isPrivate && <span className="privacy-badge">Private</span>}
+              {state.locked && <span className="privacy-badge">Locked</span>}
+            </div>
+          )
+        )}
       </div>
 
       <div className="lobby-players">

@@ -2,7 +2,7 @@ import {
   createLobby, joinLobby, leaveLobby, getLobby, getPlayerInfo,
   addChatMessage, assignTeam, autoAssignTeams, canStartGame,
   arrangeSeating, addBot, fillWithBots, removeBot, updatePlayerSocket, updateGameSettings,
-  getRoomList, fillSeat, fillSeatWithBot,
+  getRoomList, fillSeat, fillSeatWithBot, setRoomPrivate, setRoomLocked,
 } from './lobby.js';
 import { GameState } from './game/GameState.js';
 import { botBid, botPlayCard, evaluateBlindNil } from './botAI.js';
@@ -113,6 +113,8 @@ export function registerHandlers(io, socket) {
       players: lobby.players,
       isHost: true,
       gameSettings: lobby.gameSettings,
+      isPrivate: lobby.isPrivate,
+      locked: lobby.locked,
     });
     broadcastRoomListUpdate(io);
   });
@@ -137,6 +139,8 @@ export function registerHandlers(io, socket) {
         chatLog: result.lobby.chatLog,
         isHost: false,
         gameSettings: result.lobby.gameSettings,
+        isPrivate: result.lobby.isPrivate,
+        locked: result.lobby.locked,
         gameInProgress: true,
         gameState: { ...gameState, isSpectator: true },
         paused: result.lobby.paused,
@@ -150,6 +154,8 @@ export function registerHandlers(io, socket) {
         chatLog: result.lobby.chatLog,
         isHost: false,
         gameSettings: result.lobby.gameSettings,
+        isPrivate: result.lobby.isPrivate,
+        locked: result.lobby.locked,
       });
     }
 
@@ -266,6 +272,30 @@ export function registerHandlers(io, socket) {
       if (result.teamsReset) {
         io.to(info.lobbyCode).emit('teams_updated', { players: result.players });
       }
+    });
+  });
+
+  socket.on('set_room_private', ({ isPrivate }) => {
+    requireHost(socket, 'change room visibility', (info) => {
+      const result = setRoomPrivate(info.lobbyCode, isPrivate);
+      if (result.error) {
+        socket.emit('error_msg', { message: result.error });
+        return;
+      }
+      io.to(info.lobbyCode).emit('room_updated', { isPrivate: result.lobby.isPrivate, locked: result.lobby.locked });
+      broadcastRoomListUpdate(io);
+    });
+  });
+
+  socket.on('set_room_locked', ({ locked }) => {
+    requireHost(socket, 'lock room', (info) => {
+      const result = setRoomLocked(info.lobbyCode, locked);
+      if (result.error) {
+        socket.emit('error_msg', { message: result.error });
+        return;
+      }
+      io.to(info.lobbyCode).emit('room_updated', { isPrivate: result.lobby.isPrivate, locked: result.lobby.locked });
+      broadcastRoomListUpdate(io);
     });
   });
 

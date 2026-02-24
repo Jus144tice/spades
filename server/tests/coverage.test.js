@@ -24,7 +24,7 @@ import {
   createLobby, joinLobby, leaveLobby, getLobby, getPlayerInfo,
   addBot, fillWithBots, removeBot, assignTeam, autoAssignTeams,
   canStartGame, updateGameSettings, addChatMessage, arrangeSeating,
-  pauseGame, fillSeat, fillSeatWithBot,
+  pauseGame, fillSeat, fillSeatWithBot, setRoomPrivate, setRoomLocked, getRoomList,
 } from '../lobby.js';
 import { groupBySuit, pickHighest, pickLowest, pickMiddleCard, pickByDisposition, getValidLeads, getCurrentWinner } from '../ai/helpers.js';
 import { botBid, evaluateBlindNil, getDesperationContext } from '../ai/bidding.js';
@@ -1696,6 +1696,76 @@ describe('Guest player - Stats skip', () => {
     assert.ok(userIds.length > 0, 'Queries reference authenticated userId');
     const guestIds = queriesMade.flatMap(q => q.params).filter(p => p === null);
     assert.equal(guestIds.length, 0, 'No queries reference null userId');
+  });
+});
+
+describe('Room Privacy & Locking', () => {
+  it('createLobby defaults to public and unlocked', () => {
+    const sid = uniqueSocket();
+    const lobby = createLobby(sid, 'Alice');
+    assert.equal(lobby.isPrivate, false);
+    assert.equal(lobby.locked, false);
+    leaveLobby(sid);
+  });
+
+  it('setRoomPrivate toggles the private flag', () => {
+    const sid = uniqueSocket();
+    const lobby = createLobby(sid, 'Alice');
+    const r1 = setRoomPrivate(lobby.code, true);
+    assert.ok(!r1.error);
+    assert.equal(r1.lobby.isPrivate, true);
+    const r2 = setRoomPrivate(lobby.code, false);
+    assert.equal(r2.lobby.isPrivate, false);
+    leaveLobby(sid);
+  });
+
+  it('setRoomLocked toggles the locked flag', () => {
+    const sid = uniqueSocket();
+    const lobby = createLobby(sid, 'Alice');
+    const r1 = setRoomLocked(lobby.code, true);
+    assert.ok(!r1.error);
+    assert.equal(r1.lobby.locked, true);
+    const r2 = setRoomLocked(lobby.code, false);
+    assert.equal(r2.lobby.locked, false);
+    leaveLobby(sid);
+  });
+
+  it('joinLobby rejects when room is locked', () => {
+    const host = uniqueSocket();
+    const lobby = createLobby(host, 'Alice');
+    setRoomLocked(lobby.code, true);
+    const result = joinLobby(uniqueSocket(), 'Bob', lobby.code);
+    assert.equal(result.error, 'Room is locked');
+    // Unlock and join should succeed
+    setRoomLocked(lobby.code, false);
+    const joiner = uniqueSocket();
+    const result2 = joinLobby(joiner, 'Bob', lobby.code);
+    assert.ok(!result2.error);
+    leaveLobby(joiner);
+    leaveLobby(host);
+  });
+
+  it('getRoomList excludes private rooms', () => {
+    const sid = uniqueSocket();
+    const lobby = createLobby(sid, 'Alice');
+    const code = lobby.code;
+    // Room should appear in list by default
+    const list1 = getRoomList();
+    assert.ok(list1.some(r => r.code === code), 'public room appears in list');
+    // Make private
+    setRoomPrivate(code, true);
+    const list2 = getRoomList();
+    assert.ok(!list2.some(r => r.code === code), 'private room excluded from list');
+    // Make public again
+    setRoomPrivate(code, false);
+    const list3 = getRoomList();
+    assert.ok(list3.some(r => r.code === code), 'room reappears after making public');
+    leaveLobby(sid);
+  });
+
+  it('setRoomPrivate/setRoomLocked return error for invalid lobby', () => {
+    assert.ok(setRoomPrivate('ZZZZ', true).error);
+    assert.ok(setRoomLocked('ZZZZ', true).error);
   });
 });
 

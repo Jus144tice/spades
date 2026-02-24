@@ -43,6 +43,8 @@ export const initialState = {
   vacantSeats: [],
   playerCount: 4,
   mode: null,
+  isPrivate: false,
+  locked: false,
 };
 
 export function gameReducer(state, action) {
@@ -60,6 +62,8 @@ export function gameReducer(state, action) {
         isHost: true,
         reconnecting: false,
         gameSettings: action.data.gameSettings || null,
+        isPrivate: action.data.isPrivate || false,
+        locked: action.data.locked || false,
       };
 
     case 'LOBBY_JOINED': {
@@ -97,6 +101,8 @@ export function gameReducer(state, action) {
           vacantSeats: action.data.vacantSeats || [],
           playerCount: action.data.gameState.playerCount || action.data.players.length,
           mode: action.data.gameState.mode || null,
+          isPrivate: action.data.isPrivate || false,
+          locked: action.data.locked || false,
         };
       }
       return {
@@ -109,6 +115,8 @@ export function gameReducer(state, action) {
         chatMessages,
         reconnecting: false,
         gameSettings: action.data.gameSettings || null,
+        isPrivate: action.data.isPrivate || false,
+        locked: action.data.locked || false,
       };
     }
 
@@ -301,6 +309,9 @@ export function gameReducer(state, action) {
     case 'GAME_SETTINGS_UPDATED':
       return { ...state, gameSettings: action.data };
 
+    case 'ROOM_UPDATED':
+      return { ...state, isPrivate: action.data.isPrivate, locked: action.data.locked };
+
     case 'TURN_TIMER':
       return { ...state, turnTimer: { playerId: action.data.playerId, endsAt: action.data.endsAt } };
 
@@ -462,6 +473,7 @@ export function GameProvider({ children }) {
       game_over: (data) => dispatch({ type: 'GAME_OVER', data }),
       returned_to_lobby: (data) => dispatch({ type: 'RETURNED_TO_LOBBY', data }),
       game_settings_updated: (data) => dispatch({ type: 'GAME_SETTINGS_UPDATED', data }),
+      room_updated: (data) => dispatch({ type: 'ROOM_UPDATED', data }),
       turn_timer: (data) => dispatch({ type: 'TURN_TIMER', data }),
       turn_timer_clear: () => dispatch({ type: 'TURN_TIMER_CLEAR' }),
       player_afk_changed: (data) => dispatch({ type: 'PLAYER_AFK_CHANGED', data }),

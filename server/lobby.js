@@ -28,6 +28,8 @@ export function createLobby(socketId, playerName, userId) {
     gameSettings: { ...DEFAULT_GAME_SETTINGS },
     paused: false,
     vacantSeats: [],   // { seatIndex, team, previousPlayerName }
+    isPrivate: false,
+    locked: false,
   };
   lobbies.set(code, lobby);
   playerSockets.set(socketId, { playerName, lobbyCode: code });
@@ -38,6 +40,7 @@ export function joinLobby(socketId, playerName, lobbyCode, userId) {
   const code = lobbyCode.toUpperCase();
   const lobby = lobbies.get(code);
   if (!lobby) return { error: 'Room not found' };
+  if (lobby.locked) return { error: 'Room is locked' };
   if (lobby.players.length >= 10) return { error: 'Room is full' };
   if (lobby.players.some(p => p.name === playerName)) {
     return { error: 'Name already taken in this room' };
@@ -496,6 +499,7 @@ export function getRoomList() {
   for (const [code, lobby] of lobbies) {
     const humanCount = lobby.players.filter(p => !p.isBot).length;
     if (humanCount === 0) continue;
+    if (lobby.isPrivate) continue;
 
     const mode = getMode(lobby.gameSettings.gameMode || 4);
 
@@ -531,4 +535,18 @@ export function getRoomList() {
     });
   }
   return rooms;
+}
+
+export function setRoomPrivate(lobbyCode, isPrivate) {
+  const lobby = lobbies.get(lobbyCode);
+  if (!lobby) return { error: 'Lobby not found' };
+  lobby.isPrivate = !!isPrivate;
+  return { lobby };
+}
+
+export function setRoomLocked(lobbyCode, locked) {
+  const lobby = lobbies.get(lobbyCode);
+  if (!lobby) return { error: 'Lobby not found' };
+  lobby.locked = !!locked;
+  return { lobby };
 }

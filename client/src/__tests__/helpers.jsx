@@ -57,6 +57,8 @@ export function makeGameState(overrides = {}) {
     vacantSeats: [],
     playerCount: 4,
     mode: null,
+    isPrivate: false,
+    locked: false,
     ...overrides,
   };
 }
