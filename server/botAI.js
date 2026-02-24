@@ -675,9 +675,11 @@ function followToProtectNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuit
       return null; // Can't follow suit — discardNormal handles trumping
     } else {
       // Partner played and is NOT winning — they're safe
+      // Conserve high cards for future nil protection — duck if possible
       if (hasLedSuit) {
-        const beaters = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) > winningValue);
-        if (beaters.length > 0) return pickLowest(beaters);
+        const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
+        if (underCards.length > 0) return pickHighest(underCards);
+        // All cards beat the winner — play lowest to conserve protection
         return pickLowest(cardsOfSuit);
       }
       return null;
