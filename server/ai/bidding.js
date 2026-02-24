@@ -58,14 +58,14 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
       // Long suits = more forced follows = K more likely to run into the Ace
       const hasQueen = len >= 2 && RANK_VALUE[sorted[1].rank] === 12;
       if (len === 1) {
-        tricks += 0.3;
+        tricks += 0.35;
       } else if (len === 2) {
-        tricks += hasQueen ? 0.5 : 0.3;  // K,Q = solid; K,x = unprotected
+        tricks += hasQueen ? 0.55 : 0.35;  // K,Q = solid; K,x = unprotected
       } else if (len === 3) {
-        tricks += hasQueen ? 0.5 : 0.4;
+        tricks += hasQueen ? 0.55 : 0.45;
       } else {
         // 4+ cards: K gets buried in long suit, less reliable even with Q
-        tricks += hasQueen ? 0.4 : 0.3;
+        tricks += hasQueen ? 0.45 : 0.35;
       }
     } else if (topVal === 12 && len >= 3) {
       tricks += 0.2;
@@ -115,7 +115,7 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
   // Partner bid 1 = weak hand that couldn't nil. Their trick isn't guaranteed —
   // we may need to cover it, so lower our own estimate slightly.
   if (partnerBid === 1) {
-    tricks -= 0.5;
+    tricks -= 0.3;
   }
 
   let bid = Math.round(tricks);
