@@ -63,13 +63,36 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
   }
 
   // Void/short suit ruffing potential
-  for (const [suitKey, suitCards] of Object.entries(suits)) {
+  // With more spades and shorter suits, expect more trump tricks
+  const ruffSpades = Math.max(0, spadeCount - countHighSpades(sortedSpades));
+  let ruffsAllocated = 0;
+  // Process shortest suits first — voids have the most ruffing value
+  const suitsByLength = Object.entries(suits).sort((a, b) => a[1].length - b[1].length);
+
+  for (const [suitKey, suitCards] of suitsByLength) {
+    const available = ruffSpades - ruffsAllocated;
+    if (available <= 0) break;
+
     if (suitCards.length === 0 && spadeCount >= 1) {
-      tricks += Math.min(spadeCount - countHighSpades(sortedSpades), 1.0);
+      // Void: ruff immediately on every lead. More ruff spades = expect multiple ruffs.
+      if (available >= 3) {
+        tricks += 1.4;
+        ruffsAllocated += 2;
+      } else if (available >= 2) {
+        tricks += 1.1;
+        ruffsAllocated += 2;
+      } else {
+        tricks += 0.8;
+        ruffsAllocated += 1;
+      }
     } else if (suitCards.length === 1 && spadeCount >= 2) {
-      tricks += 0.5;
+      // Singleton: follow once, then ruff
+      tricks += available >= 2 ? 0.7 : 0.5;
+      ruffsAllocated += 1;
     } else if (suitCards.length === 2 && spadeCount >= 3) {
-      tricks += 0.2;
+      // Doubleton: follow twice, then potential ruff
+      tricks += spadeCount >= 5 ? 0.5 : 0.4;
+      ruffsAllocated += 1;
     }
   }
 
