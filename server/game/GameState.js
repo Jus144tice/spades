@@ -227,6 +227,7 @@ export class GameState {
             teamBooks,
             moonshot: teamKey,
             blindNilPlayers: [...this.blindNilPlayers],
+            completedTricks: this.completedTricks.map(ct => ({ ...ct })),
           };
           this.roundHistory.push(roundSummary);
           return {
@@ -280,6 +281,7 @@ export class GameState {
       teamTotals,
       teamBooks,
       blindNilPlayers: [...this.blindNilPlayers],
+      completedTricks: this.completedTricks.map(ct => ({ ...ct })),
     };
     this.roundHistory.push(roundSummary);
 
@@ -348,6 +350,17 @@ export class GameState {
       if (ct.leaderId === oldId) ct.leaderId = newId;
       for (const t of ct.trick) {
         if (t.playerId === oldId) t.playerId = newId;
+      }
+    }
+    // Also remap IDs in historical round completedTricks
+    for (const round of this.roundHistory) {
+      if (!round.completedTricks) continue;
+      for (const ct of round.completedTricks) {
+        if (ct.winnerId === oldId) ct.winnerId = newId;
+        if (ct.leaderId === oldId) ct.leaderId = newId;
+        for (const t of ct.trick) {
+          if (t.playerId === oldId) t.playerId = newId;
+        }
       }
     }
     if (this.blindNilPlayers.has(oldId)) {

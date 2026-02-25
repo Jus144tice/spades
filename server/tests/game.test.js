@@ -1175,6 +1175,33 @@ describe('GameState - completedTricks', () => {
     assert.equal(state.completedTricks.length, 1);
   });
 
+  it('includes completedTricks in roundHistory entries', () => {
+    const players = makeTestPlayers(4);
+    const game = new GameState(players, {}, { ...DEFAULT_GAME_SETTINGS, moonshot: false, tenBidBonus: false });
+
+    // Play a full round
+    for (let i = 0; i < 4; i++) {
+      game.placeBid(game.getCurrentTurnPlayerId(), 3);
+    }
+    for (let trick = 0; trick < 13; trick++) {
+      for (let card = 0; card < 4; card++) {
+        const pid = game.getCurrentTurnPlayerId();
+        for (const c of game.hands[pid]) {
+          const result = game.playCard(pid, c);
+          if (!result.error) break;
+        }
+      }
+    }
+
+    // roundHistory should have the round with completedTricks
+    assert.ok(game.roundHistory.length >= 1, 'Should have at least one round in history');
+    const lastRound = game.roundHistory[game.roundHistory.length - 1];
+    assert.ok(lastRound.completedTricks, 'Round summary should include completedTricks');
+    assert.equal(lastRound.completedTricks.length, 13, 'Should have 13 tricks in round history');
+    assert.ok(lastRound.completedTricks[0].winnerId, 'Each trick should have a winnerId');
+    assert.ok(lastRound.completedTricks[0].leaderId, 'Each trick should have a leaderId');
+  });
+
   it('remaps player IDs in completedTricks on replacePlayer', () => {
     const players = makeTestPlayers(4);
     const game = new GameState(players, {}, { ...DEFAULT_GAME_SETTINGS, moonshot: false, tenBidBonus: false });
@@ -1202,6 +1229,41 @@ describe('GameState - completedTricks', () => {
       }
       assert.notEqual(ct.winnerId, oldId, 'Old player ID should be replaced in winnerId');
       assert.notEqual(ct.leaderId, oldId, 'Old player ID should be replaced in leaderId');
+    }
+  });
+  it('remaps player IDs in roundHistory completedTricks on replacePlayer', () => {
+    const players = makeTestPlayers(4);
+    const game = new GameState(players, {}, { ...DEFAULT_GAME_SETTINGS, moonshot: false, tenBidBonus: false });
+
+    // Play a full round so roundHistory gets populated
+    for (let i = 0; i < 4; i++) {
+      game.placeBid(game.getCurrentTurnPlayerId(), 3);
+    }
+    for (let trick = 0; trick < 13; trick++) {
+      for (let card = 0; card < 4; card++) {
+        const pid = game.getCurrentTurnPlayerId();
+        for (const c of game.hands[pid]) {
+          const result = game.playCard(pid, c);
+          if (!result.error) break;
+        }
+      }
+    }
+
+    assert.ok(game.roundHistory.length >= 1);
+    const oldId = players[0].id;
+    const newId = 'replaced_player';
+    game.replacePlayer(oldId, newId, 'Replaced');
+
+    // Check roundHistory completedTricks have remapped IDs
+    for (const round of game.roundHistory) {
+      if (!round.completedTricks) continue;
+      for (const ct of round.completedTricks) {
+        assert.notEqual(ct.winnerId, oldId, 'winnerId should be remapped in roundHistory');
+        assert.notEqual(ct.leaderId, oldId, 'leaderId should be remapped in roundHistory');
+        for (const play of ct.trick) {
+          assert.notEqual(play.playerId, oldId, 'playerId should be remapped in roundHistory tricks');
+        }
+      }
     }
   });
 });

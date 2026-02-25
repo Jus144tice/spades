@@ -116,8 +116,6 @@ export default function GameScreen() {
           myIndex={myIndex}
           playerCount={playerCount}
           lastTrickWinner={state.lastTrickWinner}
-          completedTricks={state.completedTricks}
-          onShowHistory={() => setShowTrickHistory(true)}
         />
 
         {/* Right opponent */}
@@ -178,8 +176,6 @@ export default function GameScreen() {
           lastTrickWinner={state.lastTrickWinner}
           layoutSeats={layoutSeats}
           mySeatIndex={mySeatIndex}
-          completedTricks={state.completedTricks}
-          onShowHistory={() => setShowTrickHistory(true)}
         />
 
         {/* Bottom seat (me) */}
@@ -299,10 +295,19 @@ export default function GameScreen() {
         </div>
       )}
 
+      {/* Trick history button — always visible during game */}
+      {(state.completedTricks.length > 0 || state.roundHistory.some(r => r.completedTricks?.length > 0)) && (
+        <button className="trick-history-open-btn" onClick={() => setShowTrickHistory(true)} title="Trick History">
+          {'\uD83C\uDCCF'}
+        </button>
+      )}
+
       {/* Trick history overlay */}
       {showTrickHistory && (
         <TrickHistory
           completedTricks={state.completedTricks}
+          roundHistory={state.roundHistory}
+          roundNumber={state.roundNumber}
           players={state.players}
           onClose={() => setShowTrickHistory(false)}
         />

@@ -4,7 +4,7 @@ import { getTrickCardPosition } from '../modes.js';
 
 const FOUR_PLAYER_POSITIONS = ['bottom', 'left', 'top', 'right'];
 
-export default function TrickArea({ currentTrick, players, myIndex, playerCount, lastTrickWinner, layoutSeats, mySeatIndex, completedTricks, onShowHistory }) {
+export default function TrickArea({ currentTrick, players, myIndex, playerCount, lastTrickWinner, layoutSeats, mySeatIndex }) {
   const count = playerCount || players.length || 4;
   const ls = layoutSeats || count;
 
@@ -42,13 +42,7 @@ export default function TrickArea({ currentTrick, players, myIndex, playerCount,
         );
       })}
       {currentTrick.length === 0 && (
-        <div className="trick-empty">
-          {completedTricks && completedTricks.length > 0 && (
-            <button className="btn btn-ghost btn-sm trick-history-btn" onClick={onShowHistory}>
-              Trick History ({completedTricks.length})
-            </button>
-          )}
-        </div>
+        <div className="trick-empty" />
       )}
     </div>
   );

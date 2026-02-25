@@ -34,42 +34,81 @@ const COMPLETED_TRICKS = [
   },
 ];
 
+const ROUND_HISTORY = [
+  {
+    roundNumber: 1,
+    completedTricks: [
+      {
+        trickNumber: 1,
+        trick: [
+          { playerId: 'p1', card: { suit: 'D', rank: 'A' } },
+          { playerId: 'p2', card: { suit: 'D', rank: '3' } },
+          { playerId: 'p3', card: { suit: 'D', rank: '5' } },
+          { playerId: 'p4', card: { suit: 'D', rank: '7' } },
+        ],
+        winnerId: 'p1',
+        leaderId: 'p1',
+      },
+    ],
+  },
+];
+
 describe('TrickHistory', () => {
   it('shows empty state when no tricks', () => {
-    render(<TrickHistory completedTricks={[]} players={PLAYERS} onClose={vi.fn()} />);
+    render(<TrickHistory completedTricks={[]} roundHistory={[]} roundNumber={1} players={PLAYERS} onClose={vi.fn()} />);
     expect(screen.getByText('No tricks played yet.')).toBeInTheDocument();
   });
 
-  it('renders tricks in reverse order', () => {
-    render(<TrickHistory completedTricks={COMPLETED_TRICKS} players={PLAYERS} onClose={vi.fn()} />);
+  it('renders current round tricks in reverse order', () => {
+    render(<TrickHistory completedTricks={COMPLETED_TRICKS} roundHistory={[]} roundNumber={1} players={PLAYERS} onClose={vi.fn()} />);
     const items = screen.getAllByText(/^Trick \d/);
     expect(items[0].textContent).toBe('Trick 2');
     expect(items[1].textContent).toBe('Trick 1');
   });
 
   it('shows player names for each play', () => {
-    render(<TrickHistory completedTricks={COMPLETED_TRICKS} players={PLAYERS} onClose={vi.fn()} />);
+    render(<TrickHistory completedTricks={COMPLETED_TRICKS} roundHistory={[]} roundNumber={1} players={PLAYERS} onClose={vi.fn()} />);
     expect(screen.getAllByText('Alice').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bob').length).toBeGreaterThan(0);
   });
 
   it('shows winner for each trick', () => {
-    render(<TrickHistory completedTricks={COMPLETED_TRICKS} players={PLAYERS} onClose={vi.fn()} />);
-    // Both "Won by Alice" and "Won by Bob" should appear
+    render(<TrickHistory completedTricks={COMPLETED_TRICKS} roundHistory={[]} roundNumber={1} players={PLAYERS} onClose={vi.fn()} />);
     const wonTexts = screen.getAllByText(/Won by/);
     expect(wonTexts).toHaveLength(2);
   });
 
+  it('shows round headers', () => {
+    render(<TrickHistory completedTricks={COMPLETED_TRICKS} roundHistory={ROUND_HISTORY} roundNumber={2} players={PLAYERS} onClose={vi.fn()} />);
+    expect(screen.getByText('Round 2')).toBeInTheDocument();
+    expect(screen.getByText('Round 1')).toBeInTheDocument();
+  });
+
+  it('shows tricks from previous rounds via roundHistory', () => {
+    render(<TrickHistory completedTricks={[]} roundHistory={ROUND_HISTORY} roundNumber={2} players={PLAYERS} onClose={vi.fn()} />);
+    expect(screen.getByText('Round 1')).toBeInTheDocument();
+    // The round 1 trick should show
+    const wonTexts = screen.getAllByText(/Won by/);
+    expect(wonTexts).toHaveLength(1);
+  });
+
+  it('displays most recent round first', () => {
+    render(<TrickHistory completedTricks={COMPLETED_TRICKS} roundHistory={ROUND_HISTORY} roundNumber={2} players={PLAYERS} onClose={vi.fn()} />);
+    const headers = screen.getAllByText(/^Round \d/);
+    expect(headers[0].textContent).toBe('Round 2');
+    expect(headers[1].textContent).toBe('Round 1');
+  });
+
   it('calls onClose when overlay is clicked', () => {
     const onClose = vi.fn();
-    render(<TrickHistory completedTricks={COMPLETED_TRICKS} players={PLAYERS} onClose={onClose} />);
+    render(<TrickHistory completedTricks={COMPLETED_TRICKS} roundHistory={[]} roundNumber={1} players={PLAYERS} onClose={onClose} />);
     fireEvent.click(screen.getByText('Trick History').closest('.trick-history-overlay'));
     expect(onClose).toHaveBeenCalled();
   });
 
   it('calls onClose when close button is clicked', () => {
     const onClose = vi.fn();
-    render(<TrickHistory completedTricks={COMPLETED_TRICKS} players={PLAYERS} onClose={onClose} />);
+    render(<TrickHistory completedTricks={COMPLETED_TRICKS} roundHistory={[]} roundNumber={1} players={PLAYERS} onClose={onClose} />);
     fireEvent.click(screen.getByText('\u2715'));
     expect(onClose).toHaveBeenCalled();
   });

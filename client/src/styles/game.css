@@ -1003,13 +1003,31 @@
 }
 
 /* Trick History */
-.trick-history-btn {
-  font-size: 12px;
-  opacity: 0.8;
-  transition: opacity 0.2s;
+
+/* Persistent trick history button */
+.trick-history-open-btn {
+  position: fixed;
+  bottom: 48px;
+  left: 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 20px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  opacity: 0.6;
+  transition: opacity 0.2s, border-color 0.2s, color 0.2s;
 }
-.trick-history-btn:hover {
+.trick-history-open-btn:hover {
   opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .trick-history-overlay {
@@ -1027,7 +1045,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   width: min(400px, 90vw);
-  max-height: 70vh;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow);
@@ -1069,6 +1087,22 @@
 .trick-history-list {
   overflow-y: auto;
   padding: 8px 0;
+}
+
+.trick-history-round {
+  margin-bottom: 4px;
+}
+
+.trick-history-round-header {
+  position: sticky;
+  top: 0;
+  padding: 8px 16px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
 }
 
 .trick-history-item {
@@ -1179,9 +1213,16 @@
 }
 
 @media (max-width: 768px) {
+  .trick-history-open-btn {
+    bottom: 44px;
+    left: 8px;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
   .trick-history-panel {
     width: 95vw;
-    max-height: 60vh;
+    max-height: 70vh;
   }
   .trick-history-player-name {
     max-width: 50px;
