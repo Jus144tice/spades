@@ -17,6 +17,24 @@
   position: relative;
 }
 
+/* 2-team inline layout: [Team1 | Center | Team2] on desktop */
+.scoreboard-inline {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.scoreboard-inline > .score-team {
+  flex: 1;
+  min-width: 0;
+}
+
+.scoreboard-inline > .score-center {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
 .score-center {
   text-align: center;
   margin-bottom: 4px;
@@ -742,6 +760,19 @@
   .scoreboard {
     padding: 4px 8px 6px;
     flex-shrink: 0;
+  }
+
+  /* Revert inline layout to stacked on mobile */
+  .scoreboard-inline {
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    gap: 2px;
+  }
+
+  .scoreboard-inline > .score-center {
+    width: 100%;
+    order: -1; /* Center info on top on mobile */
+    margin-bottom: 2px;
   }
 
   .score-teams-row {

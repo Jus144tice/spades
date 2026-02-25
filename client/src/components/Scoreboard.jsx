@@ -44,46 +44,65 @@ export default function Scoreboard() {
     else if (booksRemaining >= 4) booksMood = 'books-loose';
   }
 
-  return (
-    <div className="scoreboard">
-      <div className="score-center">
-        <div className="round-label">Round {state.roundNumber}</div>
-        {allBidsIn && (
-          <div className={`books-remaining-banner ${booksMood}`}>
-            <span className="books-remaining-number">{booksRemaining}</span>
-            <span className="books-remaining-label">
-              {booksRemaining === 1 ? 'book' : 'books'} up for grabs
-            </span>
-          </div>
-        )}
-        {allBidsIn && tricksLeft !== null && tricksLeft < tricksPerRound && (
-          <div className="score-remaining">
-            {tricksLeft} tricks left
-          </div>
-        )}
-        {state.roundHistory.length > 0 && (
-          <button className="btn btn-tiny" onClick={() => setShowHistory(!showHistory)}>
-            History
-          </button>
-        )}
+  const renderTeam = (t) => (
+    <div key={t.teamKey} className="score-team">
+      <div className="score-team-name">
+        {t.names}{t.spoiler ? ' (2x)' : ''}
       </div>
+      <div className="score-value">{state.scores[t.teamKey] ?? 0}</div>
+      <div className="score-books">{state.books[t.teamKey] ?? 0} books</div>
+      {allBidsIn && (
+        <div className="score-bid-tracker">
+          Bid {t.bid} &middot; Took {t.tricks}/{t.bid}
+        </div>
+      )}
+    </div>
+  );
 
-      <div className="score-teams-row">
-        {teamStats.map(t => (
-          <div key={t.teamKey} className="score-team">
-            <div className="score-team-name">
-              {t.names}{t.spoiler ? ' (2x)' : ''}
-            </div>
-            <div className="score-value">{state.scores[t.teamKey] ?? 0}</div>
-            <div className="score-books">{state.books[t.teamKey] ?? 0} books</div>
-            {allBidsIn && (
-              <div className="score-bid-tracker">
-                Bid {t.bid} &middot; Took {t.tricks}/{t.bid}
-              </div>
-            )}
+  const centerContent = (
+    <div className="score-center">
+      <div className="round-label">Round {state.roundNumber}</div>
+      {allBidsIn && (
+        <div className={`books-remaining-banner ${booksMood}`}>
+          <span className="books-remaining-number">{booksRemaining}</span>
+          <span className="books-remaining-label">
+            {booksRemaining === 1 ? 'book' : 'books'} up for grabs
+          </span>
+        </div>
+      )}
+      {allBidsIn && tricksLeft !== null && tricksLeft < tricksPerRound && (
+        <div className="score-remaining">
+          {tricksLeft} tricks left
+        </div>
+      )}
+      {state.roundHistory.length > 0 && (
+        <button className="btn btn-tiny" onClick={() => setShowHistory(!showHistory)}>
+          History
+        </button>
+      )}
+    </div>
+  );
+
+  // 2-team: single row [Team1 | Center | Team2]
+  // 3+ teams: center on top, teams row below
+  const isTwoTeam = teamStats.length === 2;
+
+  return (
+    <div className={`scoreboard ${isTwoTeam ? 'scoreboard-inline' : ''}`}>
+      {isTwoTeam ? (
+        <>
+          {renderTeam(teamStats[0])}
+          {centerContent}
+          {renderTeam(teamStats[1])}
+        </>
+      ) : (
+        <>
+          {centerContent}
+          <div className="score-teams-row">
+            {teamStats.map(renderTeam)}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {showHistory && (
         <div className="score-history-overlay" onClick={() => setShowHistory(false)}>
