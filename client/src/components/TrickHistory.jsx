@@ -3,7 +3,7 @@ import React from 'react';
 const SUIT_SYMBOLS = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
 const SUIT_COLORS = { S: 'black', H: 'red', D: 'red', C: 'black' };
 
-function MiniCard({ card }) {
+export function MiniCard({ card }) {
   const symbol = SUIT_SYMBOLS[card.suit] || card.suit;
   const color = SUIT_COLORS[card.suit] || 'black';
   return (

@@ -268,6 +268,29 @@ body {
   color: var(--accent);
 }
 
+.round-history-table {
+  margin: 16px 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.round-history-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.round-history-table th,
+.round-history-table td {
+  padding: 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.round-history-table th {
+  color: var(--text-secondary);
+}
+
 /* Round summary modal */
 .round-summary-modal {
   max-width: 520px;

@@ -276,6 +276,26 @@ function leadAsNil(validCards) {
   return bestCard || pickLowest(validCards);
 }
 
+/**
+ * Analyze what the nil partner has played in each suit.
+ * Returns per-suit info: { highestShown, timesPlayed, isVoid }
+ */
+function getNilPartnerSuitInfo(partnerId, memory, rawCardsPlayed) {
+  const info = {};
+  for (const suit of ['S', 'H', 'D', 'C']) {
+    info[suit] = { highestShown: 0, timesPlayed: 0, isVoid: isKnownVoid(partnerId, suit, memory) };
+  }
+  for (const play of rawCardsPlayed) {
+    if (play.playerId === partnerId) {
+      const s = play.card.suit;
+      const v = getCardValue(play.card);
+      info[s].timesPlayed++;
+      if (v > info[s].highestShown) info[s].highestShown = v;
+    }
+  }
+  return info;
+}
+
 function leadToProtectNil(validCards, hand, ctx) {
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
@@ -313,19 +333,55 @@ function leadToProtectNil(validCards, hand, ctx) {
     const kings = offSuit.filter(c => c.rank === 'K');
     if (kings.length > 0) return pickTopFromShortestSuit(kings, hand);
 
-    // Lead high cards from short suits
-    const groups = groupBySuit(offSuit);
-    let shortestSuit = null;
-    let shortestLen = 14;
-    for (const [suit, cards] of Object.entries(groups)) {
+    // Fallback: score each card based on nil-protection value
+    // High cards are good (we win, partner ducks safely).
+    // Low cards in suits where partner has cards are dangerous.
+    const partnerInfo = getNilPartnerSuitInfo(ctx.partnerId, memory, ctx.rawCardsPlayed || []);
+
+    let bestCard = null;
+    let bestScore = -Infinity;
+    for (const card of offSuit) {
+      const val = getCardValue(card);
+      const suit = card.suit;
+      const pi = partnerInfo[suit];
       const suitLen = hand.filter(c => c.suit === suit).length;
-      if (suitLen < shortestLen) {
-        shortestLen = suitLen;
-        shortestSuit = suit;
+
+      // Base: strongly prefer high cards (Q=36, K=39, A=42 vs 5=15)
+      let score = val * 3;
+
+      const oppCanCut = anyOpponentVoid(suit, ctx.opponentIds, memory);
+
+      // Partner is void in this suit — great, they can discard safely
+      if (pi.isVoid) {
+        score += 50;
+      } else if (oppCanCut) {
+        // Opponents will ruff — our high card is wasted and partner must follow
+        // Don't give partner-comparison bonuses since we won't win the trick
+      } else if (pi.highestShown > 0 && val > pi.highestShown) {
+        // Our card beats partner's highest known card — safe lead
+        score += 15;
+      } else if (pi.highestShown > 0 && val <= pi.highestShown) {
+        // Our card is at or below partner's known highest — risky, partner could win
+        score -= 25;
+      } else if (pi.timesPlayed === 0 && val < RANK_VALUE['Q']) {
+        // Unknown suit for partner and our card is low — risky
+        score -= 15;
+      }
+
+      // Penalize suits opponents can cut (they ruff, wasting our card)
+      if (oppCanCut) {
+        score -= 30;
+      }
+
+      // Slight preference for shorter suits (work toward a void for ourselves)
+      score -= suitLen * 2;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestCard = card;
       }
     }
-    if (shortestSuit) return groups[shortestSuit][0];
-    return pickHighest(offSuit);
+    return bestCard || pickHighest(offSuit);
   }
 
   return pickHighest(spades);

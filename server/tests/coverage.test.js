@@ -28,6 +28,7 @@ import {
 } from '../lobby.js';
 import { groupBySuit, pickHighest, pickLowest, pickMiddleCard, pickByDisposition, getValidLeads, getCurrentWinner } from '../ai/helpers.js';
 import { botBid, evaluateBlindNil, getDesperationContext } from '../ai/bidding.js';
+import { botPlayCard } from '../botAI.js';
 import { createDeck, shuffle, deal } from '../game/deck.js';
 
 // ===== LOBBY MANAGEMENT =====
@@ -1766,6 +1767,127 @@ describe('Room Privacy & Locking', () => {
   it('setRoomPrivate/setRoomLocked return error for invalid lobby', () => {
     assert.ok(setRoomPrivate('ZZZZ', true).error);
     assert.ok(setRoomLocked('ZZZZ', true).error);
+  });
+});
+
+// ===== BOT - NIL PROTECTION LEAD =====
+
+describe('Bot - leadToProtectNil fallback', () => {
+  // Helper: build a minimal gameState for botPlayCard with partner nil
+  function makeNilProtectState(botHand, cardsPlayed = []) {
+    const mode = GAME_MODES[4];
+    const players = [
+      { id: 'bot', team: 1, seatIndex: 0 },
+      { id: 'opp1', team: 2, seatIndex: 1 },
+      { id: 'partner', team: 1, seatIndex: 2 },
+      { id: 'opp2', team: 2, seatIndex: 3 },
+    ];
+    const lookup = buildTeamLookup(mode, players);
+    return {
+      currentTrick: [],
+      bids: { bot: 5, partner: 0, opp1: 4, opp2: 4 },
+      tricksTaken: { bot: 0, partner: 0, opp1: 0, opp2: 0 },
+      players,
+      spadesBroken: false,
+      teamLookup: lookup,
+      mode,
+      cardsPlayed,
+      scores: { team1: 100, team2: 100 },
+      books: { team1: 0, team2: 0 },
+      settings: { ...DEFAULT_GAME_SETTINGS },
+    };
+  }
+
+  it('prefers high cards over low cards when no masters/aces/kings available', () => {
+    // Bot has only mid/low off-suit cards — should pick highest, not shortest suit's highest
+    const hand = [
+      { suit: 'H', rank: 'Q', mega: false },
+      { suit: 'D', rank: '5', mega: false },
+      { suit: 'D', rank: '6', mega: false },
+      { suit: 'C', rank: '3', mega: false },
+    ];
+    const gs = makeNilProtectState(hand);
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should pick Q of Hearts (highest value) to protect nil partner, not 3 of Clubs
+    assert.equal(card.rank, 'Q', `Should lead Q not ${card.rank} of ${card.suit}`);
+  });
+
+  it('prefers suits where partner is void (highest score)', () => {
+    // Partner showed void in Hearts — bot should lead Hearts even with a lower card
+    const cardsPlayed = [
+      // Trick 1: led Hearts, partner played Diamonds (void in Hearts)
+      { playerId: 'opp1', card: { suit: 'H', rank: 'J', mega: false } },
+      { playerId: 'partner', card: { suit: 'D', rank: '2', mega: false } },
+      { playerId: 'bot', card: { suit: 'H', rank: 'A', mega: false } },
+      { playerId: 'opp2', card: { suit: 'H', rank: '9', mega: false } },
+    ];
+    const hand = [
+      { suit: 'H', rank: '10', mega: false },
+      { suit: 'D', rank: 'Q', mega: false },
+      { suit: 'C', rank: '8', mega: false },
+    ];
+    const gs = makeNilProtectState(hand, cardsPlayed);
+    gs.spadesBroken = false;
+    const card = botPlayCard(hand, gs, 'bot');
+    // Partner is void in Hearts — should lead Hearts (partner can safely discard)
+    assert.equal(card.suit, 'H', `Should lead Hearts (partner void) not ${card.suit}`);
+  });
+
+  it('avoids low cards in suits where partner has shown high cards', () => {
+    // Partner followed with Q of Diamonds — bot should avoid leading low Diamonds
+    const cardsPlayed = [
+      // Trick 1: led Diamonds, partner followed with Q
+      { playerId: 'bot', card: { suit: 'D', rank: 'A', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: '3', mega: false } },
+      { playerId: 'partner', card: { suit: 'D', rank: 'Q', mega: false } },
+      { playerId: 'opp2', card: { suit: 'D', rank: '5', mega: false } },
+    ];
+    const hand = [
+      { suit: 'D', rank: '7', mega: false },  // low Diamond — partner has Q, risky!
+      { suit: 'C', rank: 'J', mega: false },   // J of Clubs — higher, safer
+      { suit: 'H', rank: '10', mega: false },  // 10 of Hearts
+    ];
+    const gs = makeNilProtectState(hand, cardsPlayed);
+    gs.spadesBroken = false;
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should NOT lead 7 of Diamonds (partner showed Q, our 7 doesn't beat it — partner might win)
+    assert.notEqual(card.suit + card.rank, 'D7', 'Should avoid low Diamond when partner showed Q');
+    // Should pick J or 10 — both higher scoring than D7
+    assert.ok(RANK_VALUE[card.rank] >= 10, `Should lead J+ not ${card.rank} of ${card.suit}`);
+  });
+
+  it('penalizes suits where opponents are void (risk of ruff)', () => {
+    // Opponent showed void in Clubs — don't lead Clubs even if we have high ones
+    const cardsPlayed = [
+      // Trick 1: led Clubs, opp1 trumped
+      { playerId: 'bot', card: { suit: 'C', rank: 'A', mega: false } },
+      { playerId: 'opp1', card: { suit: 'S', rank: '3', mega: false } },
+      { playerId: 'partner', card: { suit: 'C', rank: '4', mega: false } },
+      { playerId: 'opp2', card: { suit: 'C', rank: '6', mega: false } },
+    ];
+    const hand = [
+      { suit: 'C', rank: 'Q', mega: false },  // Q Clubs — opp void, will get ruffed
+      { suit: 'H', rank: 'J', mega: false },   // J Hearts — safer
+      { suit: 'D', rank: '10', mega: false },  // 10 Diamonds — safer
+    ];
+    const gs = makeNilProtectState(hand, cardsPlayed);
+    gs.spadesBroken = true;
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should prefer Hearts or Diamonds over Clubs (opponent void in Clubs)
+    assert.notEqual(card.suit, 'C', `Should avoid Clubs (opponent void) — played ${card.rank} of ${card.suit}`);
+  });
+
+  it('still leads spades correctly when only spades remain', () => {
+    const hand = [
+      { suit: 'S', rank: 'A', mega: false },
+      { suit: 'S', rank: 'K', mega: false },
+      { suit: 'S', rank: '5', mega: false },
+    ];
+    const gs = makeNilProtectState(hand);
+    gs.spadesBroken = true;
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should lead highest spade
+    assert.equal(card.rank, 'A', `Should lead A of Spades not ${card.rank}`);
   });
 });
 

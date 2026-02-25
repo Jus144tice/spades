@@ -8,7 +8,6 @@ import BidPanel from '../components/BidPanel.jsx';
 import GameOverModal from '../components/GameOverModal.jsx';
 import RoundSummaryModal from '../components/RoundSummaryModal.jsx';
 import PlayerSeat from '../components/PlayerSeat.jsx';
-import TrickHistory from '../components/TrickHistory.jsx';
 import { getTricksPerRound, getSeatPosition } from '../modes.js';
 
 export default function GameScreen() {
@@ -16,7 +15,6 @@ export default function GameScreen() {
   const socket = useSocket();
   const [queuedCard, setQueuedCard] = useState(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const [showTrickHistory, setShowTrickHistory] = useState(false);
   const queuedCardRef = useRef(null);
   queuedCardRef.current = queuedCard;
 
@@ -293,24 +291,6 @@ export default function GameScreen() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Trick history button — always visible during game */}
-      {(state.completedTricks.length > 0 || state.roundHistory.some(r => r.completedTricks?.length > 0)) && (
-        <button className="trick-history-open-btn" onClick={() => setShowTrickHistory(true)} title="Trick History">
-          {'\uD83C\uDCCF'}
-        </button>
-      )}
-
-      {/* Trick history overlay */}
-      {showTrickHistory && (
-        <TrickHistory
-          completedTricks={state.completedTricks}
-          roundHistory={state.roundHistory}
-          roundNumber={state.roundNumber}
-          players={state.players}
-          onClose={() => setShowTrickHistory(false)}
-        />
       )}
 
       {/* Round summary modal */}

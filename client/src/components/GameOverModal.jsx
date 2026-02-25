@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useGame } from '../context/GameContext.jsx';
 import { isSpoilerTeam } from '../modes.js';
+import { MiniCard } from './TrickHistory.jsx';
 
 const GAME_OVER_TIMEOUT = 60;
 
@@ -12,6 +13,7 @@ export default function GameOverModal() {
 
   const isSinglePlayer = state.players.filter(p => !p.isBot).length <= 1;
   const [countdown, setCountdown] = useState(isSinglePlayer ? 0 : GAME_OVER_TIMEOUT);
+  const [expandedRound, setExpandedRound] = useState(null);
 
   useEffect(() => {
     if (!data || isSinglePlayer) return;
@@ -79,18 +81,35 @@ export default function GameOverModal() {
               </thead>
               <tbody>
                 {data.roundHistory.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.roundNumber}</td>
-                    {teams.map(t => {
-                      const score = r.teamScores?.[t.teamKey] ?? 0;
-                      const total = r.teamTotals?.[t.teamKey] ?? 0;
-                      return (
-                        <td key={t.teamKey}>
-                          {score > 0 ? '+' : ''}{score === 'MOONSHOT' ? 'MOONSHOT' : score} ({total})
+                  <React.Fragment key={i}>
+                    <tr
+                      className={`history-row ${r.completedTricks?.length ? 'expandable' : ''} ${expandedRound === i ? 'expanded' : ''}`}
+                      onClick={() => r.completedTricks?.length && setExpandedRound(expandedRound === i ? null : i)}
+                    >
+                      <td>
+                        {r.completedTricks?.length > 0 && (
+                          <span className="expand-arrow">{expandedRound === i ? '\u25BC' : '\u25B6'}</span>
+                        )}
+                        {r.roundNumber}
+                      </td>
+                      {teams.map(t => {
+                        const score = r.teamScores?.[t.teamKey] ?? 0;
+                        const total = r.teamTotals?.[t.teamKey] ?? 0;
+                        return (
+                          <td key={t.teamKey}>
+                            {score > 0 ? '+' : ''}{score === 'MOONSHOT' ? 'MOONSHOT' : score} ({total})
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {expandedRound === i && r.completedTricks?.length > 0 && (
+                      <tr className="drilldown-row">
+                        <td colSpan={teams.length + 1}>
+                          <GameOverTrickDrilldown tricks={r.completedTricks} players={state.players} />
                         </td>
-                      );
-                    })}
-                  </tr>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -106,6 +125,37 @@ export default function GameOverModal() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function GameOverTrickDrilldown({ tricks, players }) {
+  const getName = (id) => {
+    const p = players.find(p => p.id === id);
+    return p ? p.name : '???';
+  };
+
+  return (
+    <div className="round-tricks-drilldown">
+      {tricks.map(ct => (
+        <div key={ct.trickNumber} className="drilldown-trick">
+          <div className="drilldown-trick-header">
+            <span className="drilldown-trick-num">Trick {ct.trickNumber}</span>
+            <span className="drilldown-trick-won">Won by {getName(ct.winnerId)}</span>
+          </div>
+          <div className="drilldown-plays">
+            {ct.trick.map((play, j) => (
+              <span
+                key={j}
+                className={`drilldown-play ${play.playerId === ct.winnerId ? 'winner' : ''} ${play.playerId === ct.leaderId ? 'leader' : ''}`}
+              >
+                <span className="drilldown-name">{getName(play.playerId)}</span>
+                <MiniCard card={play.card} />
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

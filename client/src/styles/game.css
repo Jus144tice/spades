@@ -186,6 +186,104 @@
   color: var(--text-secondary);
 }
 
+/* Expandable history rows */
+.history-row.expandable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.history-row.expandable:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.history-row.expanded {
+  background: rgba(79, 195, 247, 0.06);
+}
+
+.expand-arrow {
+  font-size: 9px;
+  margin-right: 4px;
+  color: var(--text-secondary);
+}
+
+.in-progress-cell {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.drilldown-row td {
+  padding: 0 !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.round-tricks-drilldown {
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.15);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.drilldown-trick {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.drilldown-trick:last-child {
+  border-bottom: none;
+}
+
+.drilldown-trick-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.drilldown-trick-num {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.drilldown-trick-won {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.drilldown-plays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.drilldown-play {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.drilldown-play.winner {
+  background: rgba(79, 195, 247, 0.15);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.drilldown-play.leader {
+  border-left: 2px solid var(--gold);
+}
+
+.drilldown-name {
+  color: var(--text-secondary);
+  font-size: 10px;
+  max-width: 55px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Game Table */
 .game-table {
   flex: 1;
@@ -1035,32 +1133,6 @@
 
 /* Trick History */
 
-/* Persistent trick history button */
-.trick-history-open-btn {
-  position: fixed;
-  bottom: 48px;
-  left: 12px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-size: 20px;
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  opacity: 0.6;
-  transition: opacity 0.2s, border-color 0.2s, color 0.2s;
-}
-.trick-history-open-btn:hover {
-  opacity: 1;
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
 .trick-history-overlay {
   position: fixed;
   inset: 0;
@@ -1244,13 +1316,6 @@
 }
 
 @media (max-width: 768px) {
-  .trick-history-open-btn {
-    bottom: 44px;
-    left: 8px;
-    width: 36px;
-    height: 36px;
-    font-size: 18px;
-  }
   .trick-history-panel {
     width: 95vw;
     max-height: 70vh;
