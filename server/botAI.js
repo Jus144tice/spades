@@ -982,6 +982,12 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
       return forcedTrumpCard(spades, currentTrick);
     }
 
+    // Duck mode with personal bid met: never trump, shed high cards instead
+    if (ctx.botStillNeeds <= 0 && (ctx.disposition || 0) <= -1) {
+      if (nonSpade.length > 0) return pickHighest(nonSpade);
+      return forcedTrumpCard(spades, currentTrick);
+    }
+
     if (ctx.canGuaranteeBid && ctx.setMode) {
       if (spades.length > 0 && ledSuit !== 'S') {
         const beaten = trumpBeaters(spades, currentTrick);

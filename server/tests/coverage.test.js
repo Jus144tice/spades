@@ -1985,6 +1985,42 @@ describe('Bot - duck mode shedding under partner boss card', () => {
     // Should keep K for future use, play lower card
     assert.notEqual(card.rank, 'K', `Should keep K when still needing tricks, played ${card.rank}`);
   });
+
+  it('does NOT trump offsuits when ducking with personal bid met', () => {
+    // Bot is void in led suit, has spades + off-suit. Should shed off-suit, not trump.
+    const hand = [
+      { suit: 'S', rank: 'Q', mega: false },
+      { suit: 'S', rank: '8', mega: false },
+      { suit: 'C', rank: 'J', mega: false },
+      { suit: 'C', rank: '5', mega: false },
+    ];
+    // Opponent led Hearts, bot is void in Hearts
+    const trick = [
+      { playerId: 'opp1', card: { suit: 'H', rank: '10', mega: false } },
+    ];
+    const gs = makeDuckFollowState(hand, trick);
+    const card = botPlayCard(hand, gs, 'bot');
+    // In duck mode, bot should NOT trump — should discard a club instead
+    assert.notEqual(card.suit, 'S', `Should not trump when ducking, played ${card.rank} of ${card.suit}`);
+  });
+
+  it('does NOT trump even when team still needs tricks but bot is done', () => {
+    const hand = [
+      { suit: 'S', rank: 'K', mega: false },
+      { suit: 'S', rank: '5', mega: false },
+      { suit: 'D', rank: 'Q', mega: false },
+      { suit: 'D', rank: '3', mega: false },
+    ];
+    const trick = [
+      { playerId: 'opp1', card: { suit: 'H', rank: 'J', mega: false } },
+    ];
+    const gs = makeDuckFollowState(hand, trick);
+    // Team still needs tricks (partner hasn't made bid), but bot is done
+    gs.bids.partner = 2;
+    gs.tricksTaken.partner = 0;
+    const card = botPlayCard(hand, gs, 'bot');
+    assert.notEqual(card.suit, 'S', `Should not trump when bot done and ducking, played ${card.rank} of ${card.suit}`);
+  });
 });
 
 console.log('Coverage test suites defined. Running...');
