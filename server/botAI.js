@@ -809,8 +809,15 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
       const partnerPlay = currentTrick.find(t => t.playerId === ctx.partnerId);
       const partnerIsMaster = partnerPlay && isMasterCard(partnerPlay.card, memory);
 
-      // NEVER overtake partner's boss card — it's already winning, save your high cards
+      // NEVER overtake partner's boss card — it's already winning
       if (partnerIsMaster || winningValue >= RANK_VALUE['K']) {
+        // Bot personally done and ducking: dump highest under partner's winner
+        // Shedding high cards now prevents accidentally winning future tricks
+        if (ctx.botStillNeeds <= 0 && (ctx.disposition || 0) <= -1) {
+          const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
+          if (underCards.length > 0) return pickHighest(underCards);
+          return pickLowest(cardsOfSuit);
+        }
         if (ctx.duckMode && ctx.canGuaranteeBid && ctx.mastersToSpare > 0) {
           // Consolidation: dump masters on partner's winning trick — but ONLY if we can spare them
           const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
@@ -870,12 +877,12 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
 
     // Never overtake partner's boss card or strong card
     if (partnerIsMaster || winningValue >= RANK_VALUE['J']) {
-      // Hard duck: consolidate masters on partner's strong trick
-      if (disp <= -2 && ctx.mastersToSpare > 0) {
-        const mastersInSuit = cardsOfSuit.filter(c => isMasterCard(c, memory));
-        if (mastersInSuit.length > 0 && cardsOfSuit.length > mastersInSuit.length) {
-          return pickHighest(mastersInSuit);
-        }
+      // Duck mode: shed highest under partner's winner — all our cards are expendable
+      // since bid is met, and dumping high cards prevents accidental future wins
+      if (disp <= -1) {
+        const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < winningValue);
+        if (underCards.length > 0) return pickHighest(underCards);
+        return pickLowest(cardsOfSuit);
       }
       return pickByDisposition(cardsOfSuit, disp);
     }

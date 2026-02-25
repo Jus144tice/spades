@@ -1891,4 +1891,100 @@ describe('Bot - leadToProtectNil fallback', () => {
   });
 });
 
+// ===== BOT - DUCK MODE: SHED HIGH UNDER PARTNER'S BOSS CARD =====
+
+describe('Bot - duck mode shedding under partner boss card', () => {
+  // Helper: build a gameState where bot follows partner's lead, bid met, duck mode
+  // Uses low bids so disposition calculation (which uses players.length=4 as tricks per round)
+  // produces a negative disposition. Both teams having made their bid forces hard duck.
+  function makeDuckFollowState(botHand, currentTrick, opts = {}) {
+    const mode = GAME_MODES[4];
+    const players = [
+      { id: 'partner', team: 1, seatIndex: 0 },
+      { id: 'opp1', team: 2, seatIndex: 1 },
+      { id: 'bot', team: 1, seatIndex: 2 },
+      { id: 'opp2', team: 2, seatIndex: 3 },
+    ];
+    const lookup = buildTeamLookup(mode, players);
+    return {
+      currentTrick,
+      // Low bids so freeTricks > 0. Both teams made → forces duck.
+      // Avoid bid=0 which triggers nil protection logic.
+      bids: { bot: 1, partner: 1, opp1: 1, opp2: 1 },
+      tricksTaken: { bot: 1, partner: 1, opp1: 1, opp2: 1 },
+      players,
+      spadesBroken: true,
+      teamLookup: lookup,
+      mode,
+      cardsPlayed: opts.cardsPlayed || [],
+      scores: { team1: 100, team2: 100 },
+      books: { team1: opts.books ?? 5, team2: 0 },
+      settings: { ...DEFAULT_GAME_SETTINGS },
+    };
+  }
+
+  it('dumps highest card under partner Ace when bid is met and ducking', () => {
+    const hand = [
+      { suit: 'H', rank: 'K', mega: false },
+      { suit: 'H', rank: '7', mega: false },
+      { suit: 'H', rank: '3', mega: false },
+      { suit: 'D', rank: '5', mega: false },
+    ];
+    // Partner led A♥, opponents played low
+    const trick = [
+      { playerId: 'partner', card: { suit: 'H', rank: 'A', mega: false } },
+      { playerId: 'opp1', card: { suit: 'H', rank: '4', mega: false } },
+    ];
+    const gs = makeDuckFollowState(hand, trick);
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should dump K♥ (highest under partner's Ace) to shed dangerous card
+    assert.equal(card.rank, 'K', `Should dump K under partner's A, not ${card.rank} of ${card.suit}`);
+    assert.equal(card.suit, 'H');
+  });
+
+  it('dumps Q under partner King when ducking', () => {
+    const hand = [
+      { suit: 'D', rank: 'Q', mega: false },
+      { suit: 'D', rank: '6', mega: false },
+      { suit: 'D', rank: '2', mega: false },
+      { suit: 'S', rank: '4', mega: false },
+    ];
+    // Partner led K♦ (boss), opp played low
+    const trick = [
+      { playerId: 'partner', card: { suit: 'D', rank: 'K', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: '5', mega: false } },
+    ];
+    // A♦ already played — partner's K is now the boss
+    const cardsPlayed = [
+      { playerId: 'opp2', card: { suit: 'D', rank: 'A', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: 'J', mega: false } },
+      { playerId: 'bot', card: { suit: 'D', rank: '10', mega: false } },
+      { playerId: 'partner', card: { suit: 'D', rank: '9', mega: false } },
+    ];
+    const gs = makeDuckFollowState(hand, trick, { cardsPlayed });
+    const card = botPlayCard(hand, gs, 'bot');
+    assert.equal(card.rank, 'Q', `Should dump Q under partner's boss K, not ${card.rank}`);
+  });
+
+  it('does NOT dump high cards when bot still needs tricks', () => {
+    const hand = [
+      { suit: 'H', rank: 'K', mega: false },
+      { suit: 'H', rank: '7', mega: false },
+      { suit: 'D', rank: '5', mega: false },
+      { suit: 'S', rank: '3', mega: false },
+    ];
+    const trick = [
+      { playerId: 'partner', card: { suit: 'H', rank: 'A', mega: false } },
+      { playerId: 'opp1', card: { suit: 'H', rank: '4', mega: false } },
+    ];
+    const gs = makeDuckFollowState(hand, trick);
+    // Bot still needs 2 tricks — override the default bids/tricks
+    gs.bids.bot = 3;
+    gs.tricksTaken.bot = 1;
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should keep K for future use, play lower card
+    assert.notEqual(card.rank, 'K', `Should keep K when still needing tricks, played ${card.rank}`);
+  });
+});
+
 console.log('Coverage test suites defined. Running...');
