@@ -76,12 +76,16 @@ function AppContent() {
   chatOpenRef.current = chatOpen;
   const prevMsgCountRef = React.useRef(state.chatMessages.length);
 
-  // Track unread messages when chat is hidden
+  // Track unread messages when chat is hidden (only human messages, not system)
   useEffect(() => {
     const prevCount = prevMsgCountRef.current;
     const newCount = state.chatMessages.length;
     if (newCount > prevCount && !chatOpenRef.current) {
-      setUnreadCount(prev => prev + (newCount - prevCount));
+      const newMessages = state.chatMessages.slice(prevCount);
+      const humanCount = newMessages.filter(m => m.sender !== null).length;
+      if (humanCount > 0) {
+        setUnreadCount(prev => prev + humanCount);
+      }
     }
     prevMsgCountRef.current = newCount;
   }, [state.chatMessages.length]);
