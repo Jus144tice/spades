@@ -48,14 +48,7 @@
   text-align: center;
   flex: 1;
   min-width: 0;
-  border-left: 3px solid var(--border);
-  padding-left: 8px;
 }
-
-.score-team.score-team1 { border-left-color: var(--team1); }
-.score-team.score-team2 { border-left-color: var(--team2); }
-.score-team.score-team3 { border-left-color: var(--team3); }
-.score-team.score-team4 { border-left-color: var(--team4); }
 
 .score-team-name {
   font-size: 12px;
