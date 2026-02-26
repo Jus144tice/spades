@@ -312,6 +312,14 @@ body {
   border-left-color: var(--team2);
 }
 
+.summary-section.summary-team3 {
+  border-left-color: var(--team3);
+}
+
+.summary-section.summary-team4 {
+  border-left-color: var(--team4);
+}
+
 .summary-header {
   display: flex;
   justify-content: space-between;

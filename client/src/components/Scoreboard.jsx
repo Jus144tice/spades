@@ -47,7 +47,7 @@ export default function Scoreboard() {
   }
 
   const renderTeam = (t) => (
-    <div key={t.teamKey} className="score-team">
+    <div key={t.teamKey} className={`score-team score-${t.teamKey}`}>
       <div className="score-team-name">
         {t.names}{t.spoiler ? ' (2x)' : ''}
       </div>
