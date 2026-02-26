@@ -85,26 +85,19 @@ export default function Scoreboard() {
     </div>
   );
 
-  // 2-team: single row [Team1 | Center | Team2]
-  // 3+ teams: center on top, teams row below
-  const isTwoTeam = teamStats.length === 2;
+  // Always inline: [Left teams... | Center | Right teams...]
+  // For odd team counts, round up and add a blank spacer on the right
+  const teamsPerSide = Math.ceil(teamStats.length / 2);
+  const leftTeams = teamStats.slice(0, teamsPerSide);
+  const rightTeams = teamStats.slice(teamsPerSide);
+  const needsSpacer = teamStats.length % 2 !== 0;
 
   return (
-    <div className={`scoreboard ${isTwoTeam ? 'scoreboard-inline' : ''}`}>
-      {isTwoTeam ? (
-        <>
-          {renderTeam(teamStats[0])}
-          {centerContent}
-          {renderTeam(teamStats[1])}
-        </>
-      ) : (
-        <>
-          {centerContent}
-          <div className="score-teams-row">
-            {teamStats.map(renderTeam)}
-          </div>
-        </>
-      )}
+    <div className="scoreboard scoreboard-inline">
+      {leftTeams.map(renderTeam)}
+      {centerContent}
+      {rightTeams.map(renderTeam)}
+      {needsSpacer && <div className="score-team score-team-spacer" />}
 
       {showHistory && (
         <HistoryOverlay
