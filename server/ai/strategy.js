@@ -93,6 +93,19 @@ export function calculateDisposition(hand, ctx) {
     }
   }
 
+  // Mid-round re-evaluation: books already absorbed tighten remaining free tricks.
+  // If team has made but opponents haven't, the remaining situation may warrant SET
+  // even if the initial free tricks suggested duck mode.
+  if (ctx.teamTricks >= ctx.teamBid && oppStillNeeds > 0 && totalTricksPlayed > 0) {
+    if (remainingFree <= 1) {
+      disposition = Math.max(disposition, 1.5);
+    } else if (remainingFree <= 2) {
+      disposition = Math.max(disposition, 1);
+    } else if (remainingFree <= 3) {
+      disposition = Math.max(disposition, 0);
+    }
+  }
+
   // Project guaranteed future winners (books we know are coming)
   const guaranteedFutureWins = countGuaranteedWinners(hand, ctx.memory);
   const projectedBooks = teamBooks + guaranteedFutureWins;
