@@ -307,9 +307,56 @@ function leadToProtectNil(validCards, hand, ctx) {
   const offSuit = validCards.filter(c => c.suit !== 'S');
   const spades = validCards.filter(c => c.suit === 'S');
   const memory = ctx.memory;
+  const partnerInfo = getNilPartnerSuitInfo(ctx.partnerId, memory, ctx.rawCardsPlayed || []);
+
+  // ===== PRIORITY 1: Lead master spades to pull trumps =====
+  // Every master spade we lead is guaranteed to win and removes spades from the
+  // game, directly protecting partner from being forced to win future spade tricks.
+  if (spades.length > 0) {
+    const masterSpades = spades.filter(c => isMasterCard(c, memory));
+    if (masterSpades.length > 0) {
+      return pickHighest(masterSpades);
+    }
+  }
+
+  // ===== Suit danger assessment =====
+  // For each off-suit, check if outstanding high cards (Q+) might be stuck in
+  // partner's hand.  If we tapped a suit and the big cards never appeared while
+  // partner played low, those cards are likely still in partner's hand.
+  // Higher penalty → bot switches to a different suit.
+  const suitDanger = {};
+  for (const suit of ['H', 'D', 'C']) {
+    const pi = partnerInfo[suit];
+    if (pi.isVoid) { suitDanger[suit] = 0; continue; }
+
+    // Our highest card in this suit
+    const ourCards = hand.filter(c => c.suit === suit);
+    const ourHighest = ourCards.length > 0
+      ? Math.max(...ourCards.map(c => getCardValue(c))) : 0;
+
+    // Outstanding high cards (Q+) that beat our best — could be in partner's hand
+    const dangerCards = memory.outstanding[suit]
+      .filter(c => getCardValue(c) > ourHighest && RANK_VALUE[c.rank] >= 12);
+
+    if (dangerCards.length === 0) { suitDanger[suit] = 0; continue; }
+
+    // High cards are out there and we can't cover them
+    let danger = dangerCards.length; // base: 1 per missing high card
+
+    if (pi.timesPlayed > 0) {
+      // Suit was tapped — partner played but high cards didn't appear.
+      // Classic signal: we led King, Ace didn't show, partner threw the 2.
+      danger += 2;
+      // If partner's highest shown is very low, gap to the missing high card
+      // is large → partner likely sandbagging the high card
+      if (pi.highestShown <= RANK_VALUE['5']) danger += 1;
+    }
+
+    suitDanger[suit] = danger;
+  }
 
   if (offSuit.length > 0) {
-    // Prioritize leading suits where nil partner IS void — they can shed dangerous cards
+    // ===== PRIORITY 2: Partner void suits — they can shed dangerous cards =====
     const partnerVoidSuits = offSuit.filter(c => isKnownVoid(ctx.partnerId, c.suit, memory));
     if (partnerVoidSuits.length > 0) {
       // Lead masters from partner's void suits (we win, partner sheds)
@@ -319,7 +366,7 @@ function leadToProtectNil(validCards, hand, ctx) {
       return pickHighest(partnerVoidSuits);
     }
 
-    // Lead master cards — guaranteed to win, protects nil partner
+    // ===== PRIORITY 3: Off-suit master cards — guaranteed to win =====
     const masters = offSuit.filter(c => isMasterCard(c, memory));
     if (masters.length > 0) {
       // Prefer masters from suits that are safe (opponents won't ruff, partner won't win)
@@ -334,17 +381,22 @@ function leadToProtectNil(validCards, hand, ctx) {
       return pickTopFromShortestSuit(masters, hand);
     }
 
+    // ===== PRIORITY 4: Aces (always safe — highest in suit) =====
     const aces = offSuit.filter(c => c.rank === 'A');
     if (aces.length > 0) return pickTopFromShortestSuit(aces, hand);
 
+    // ===== PRIORITY 5: Kings — but prefer suits where Ace is NOT a danger =====
     const kings = offSuit.filter(c => c.rank === 'K');
-    if (kings.length > 0) return pickTopFromShortestSuit(kings, hand);
+    if (kings.length > 0) {
+      // Prefer kings in suits with lower danger (Ace less likely in partner's hand)
+      const saferKings = kings.filter(c => (suitDanger[c.suit] || 0) <= 1);
+      if (saferKings.length > 0) return pickTopFromShortestSuit(saferKings, hand);
+      return pickTopFromShortestSuit(kings, hand);
+    }
 
-    // Fallback: score each card based on nil-protection value
+    // ===== FALLBACK: Score each card with nil-protection value =====
     // High cards are good (we win, partner ducks safely).
-    // Low cards in suits where partner has cards are dangerous.
-    const partnerInfo = getNilPartnerSuitInfo(ctx.partnerId, memory, ctx.rawCardsPlayed || []);
-
+    // Penalize suits where partner might be holding missing high cards.
     let bestCard = null;
     let bestScore = -Infinity;
     for (const card of offSuit) {
@@ -352,6 +404,7 @@ function leadToProtectNil(validCards, hand, ctx) {
       const suit = card.suit;
       const pi = partnerInfo[suit];
       const suitLen = hand.filter(c => c.suit === suit).length;
+      const danger = suitDanger[suit] || 0;
 
       // Base: strongly prefer high cards (Q=36, K=39, A=42 vs 5=15)
       let score = val * 3;
@@ -379,6 +432,10 @@ function leadToProtectNil(validCards, hand, ctx) {
       if (oppCanCut) {
         score -= 30;
       }
+
+      // Penalize suits where partner might be holding missing high cards
+      // (e.g., we led King, Ace didn't appear, partner threw low → switch suits)
+      score -= danger * 20;
 
       // Slight preference for shorter suits (work toward a void for ourselves)
       score -= suitLen * 2;
