@@ -485,6 +485,42 @@ describe('Scoring', () => {
     assert.equal(checkWinner({ team1: 400, team2: 499 }, 500, mode4), null);
   });
 
+  it('negative total: ones digit equals book count', () => {
+    // Round 1: team gets set → negative score, no books
+    const bids1 = { p1: 5, p2: 3, p3: 3, p4: 2 };
+    const tricks1 = { p1: 3, p2: 4, p3: 4, p4: 2 };
+    const scores1 = { team1: 0, team2: 0 };
+    const books1 = { team1: 0, team2: 0 };
+    const r1 = scoreRound(players4, bids1, tricks1, scores1, books1, DEFAULT_GAME_SETTINGS, new Set(), mode4, lookup4);
+    // Team 1: bid 8, took 7 → set = -80, no books
+    assert.equal(r1.team1.newTotal, -80);
+    assert.equal(r1.team1.books, 0);
+
+    // Round 2: team makes with overtricks while still negative
+    const bids2 = { p1: 3, p2: 3, p3: 3, p4: 4 };
+    const tricks2 = { p1: 4, p2: 4, p3: 4, p4: 1 };
+    const scores2 = { team1: r1.team1.newTotal, team2: r1.team2.newTotal };
+    const books2 = { team1: r1.team1.books, team2: r1.team2.books };
+    const r2 = scoreRound(players4, bids2, tricks2, scores2, books2, DEFAULT_GAME_SETTINGS, new Set(), mode4, lookup4);
+    // Team 1: bid 6, took 8 → +62, 2 books. Raw total: -80 + 62 = -18.
+    // Convention: ones digit must = books (2), so total should be -22 (NOT -18).
+    assert.equal(r2.team1.books, 2);
+    assert.equal(r2.team1.newTotal, -22);
+    assert.equal(Math.abs(r2.team1.newTotal) % 10, r2.team1.books);
+
+    // Round 3: another made bid from the adjusted score
+    const bids3 = { p1: 4, p2: 4, p3: 3, p4: 2 };
+    const tricks3 = { p1: 4, p2: 3, p3: 5, p4: 1 };
+    const scores3 = { team1: r2.team1.newTotal, team2: r2.team2.newTotal };
+    const books3 = { team1: r2.team1.books, team2: r2.team2.books };
+    const r3 = scoreRound(players4, bids3, tricks3, scores3, books3, DEFAULT_GAME_SETTINGS, new Set(), mode4, lookup4);
+    // Team 1: bid 7, took 9 → +72, 2 more books. Books 2+2=4.
+    // Raw old was -18, raw total: -18 + 72 = 54. Positive → ones digit = 4 = books.
+    assert.equal(r3.team1.books, 4);
+    assert.equal(r3.team1.newTotal, 54);
+    assert.equal(Math.abs(r3.team1.newTotal) % 10, r3.team1.books);
+  });
+
   it('checkWinner handles ties (play another round)', () => {
     assert.equal(checkWinner({ team1: 500, team2: 500 }, 500, mode4), null);
   });
