@@ -76,6 +76,22 @@ describe('gameReducer', () => {
       expect(result.spadesBroken).toBe(true);
     });
 
+    it('mid-game spectator join carries pausedByHost', () => {
+      const result = reduce({
+        type: 'LOBBY_JOINED',
+        data: {
+          playerId: 'p2', lobbyCode: 'ABCD', players: [], isHost: false, chatLog: [],
+          gameInProgress: true, paused: true, pausedByHost: true,
+          gameState: { phase: 'playing', hand: [], bids: {}, currentTrick: [], tricksTaken: {},
+            scores: {}, books: {}, currentTurnId: 'p1', dealerIndex: 0,
+            spadesBroken: false, roundNumber: 1, roundHistory: [],
+            playerCount: 4, mode: null },
+        },
+      });
+      expect(result.gamePaused).toBe(true);
+      expect(result.pausedByHost).toBe(true);
+    });
+
     it('carries isPrivate and locked from payload', () => {
       const result = reduce({
         type: 'LOBBY_JOINED',
@@ -439,6 +455,25 @@ describe('gameReducer', () => {
       expect(result.gamePaused).toBe(false);
       expect(result.vacantSeats).toEqual([]);
     });
+
+    it('GAME_PAUSED with pausedByHost sets flag', () => {
+      const result = reduce({ type: 'GAME_PAUSED', data: { pausedByHost: true, vacantSeats: [] } });
+      expect(result.gamePaused).toBe(true);
+      expect(result.pausedByHost).toBe(true);
+      expect(result.vacantSeats).toEqual([]);
+    });
+
+    it('GAME_PAUSED without pausedByHost defaults to false', () => {
+      const result = reduce({ type: 'GAME_PAUSED', data: { vacantSeats: [{ seatIndex: 1 }] } });
+      expect(result.pausedByHost).toBe(false);
+    });
+
+    it('GAME_RESUMED clears pausedByHost', () => {
+      const state = { ...initialState, gamePaused: true, pausedByHost: true };
+      const result = reduce({ type: 'GAME_RESUMED' }, state);
+      expect(result.gamePaused).toBe(false);
+      expect(result.pausedByHost).toBe(false);
+    });
   });
 
   describe('SEAT_FILLED', () => {
@@ -465,6 +500,7 @@ describe('gameReducer', () => {
       expect(result.hand).toHaveLength(1);
       expect(result.scores.team1).toBe(50);
       expect(result.gamePaused).toBe(false);
+      expect(result.pausedByHost).toBe(false);
       expect(result.vacantSeats).toEqual([]);
     });
   });
@@ -510,6 +546,19 @@ describe('gameReducer', () => {
       expect(result.screen).toBe('lobby');
       expect(result.chatMessages).toHaveLength(1);
       expect(result.reconnecting).toBe(false);
+    });
+
+    it('restores pausedByHost on game rejoin', () => {
+      const data = {
+        screen: 'game', playerId: 'p1', lobbyCode: 'ABCD', players: [{ id: 'p1' }],
+        isHost: true, chatLog: [], phase: 'playing', hand: [], bids: {},
+        currentTrick: [], tricksTaken: {}, scores: {}, books: {},
+        currentTurnId: 'p1', dealerIndex: 0, spadesBroken: false, roundNumber: 1,
+        roundHistory: [], gamePaused: true, pausedByHost: true,
+      };
+      const result = reduce({ type: 'REJOIN_SUCCESS', data });
+      expect(result.gamePaused).toBe(true);
+      expect(result.pausedByHost).toBe(true);
     });
   });
 

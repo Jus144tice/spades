@@ -1966,7 +1966,7 @@ describe('Bot - duck mode shedding under partner boss card', () => {
     assert.equal(card.rank, 'Q', `Should dump Q under partner's boss K, not ${card.rank}`);
   });
 
-  it('does NOT dump high cards when bot still needs tricks', () => {
+  it('dumps high cards in hard duck mode even when bot personally short', () => {
     const hand = [
       { suit: 'H', rank: 'K', mega: false },
       { suit: 'H', rank: '7', mega: false },
@@ -1978,12 +1978,12 @@ describe('Bot - duck mode shedding under partner boss card', () => {
       { playerId: 'opp1', card: { suit: 'H', rank: '4', mega: false } },
     ];
     const gs = makeDuckFollowState(hand, trick);
-    // Bot still needs 2 tricks — override the default bids/tricks
+    // Bot bid 3, took 1 — personally short but many free tricks = duck mode
     gs.bids.bot = 3;
     gs.tricksTaken.bot = 1;
     const card = botPlayCard(hand, gs, 'bot');
-    // Should keep K for future use, play lower card
-    assert.notEqual(card.rank, 'K', `Should keep K when still needing tricks, played ${card.rank}`);
+    // With lots of free tricks, bot should shed K on partner's Ace (consolidation)
+    assert.equal(card.rank, 'K', `Should dump K on partner's Ace in duck mode, played ${card.rank}`);
   });
 
   it('does NOT trump offsuits when ducking with personal bid met', () => {
@@ -2020,6 +2020,96 @@ describe('Bot - duck mode shedding under partner boss card', () => {
     gs.tricksTaken.partner = 0;
     const card = botPlayCard(hand, gs, 'bot');
     assert.notEqual(card.suit, 'S', `Should not trump when bot done and ducking, played ${card.rank} of ${card.suit}`);
+  });
+});
+
+// ===== TEAM-FIRST DUCK/SET BEHAVIOR =====
+
+describe('Team-first duck/set when team bid is met', () => {
+  // Helper: build a 4p game state where we control team/personal bids and tricks
+  function makeTeamBidState({ botBid, botTricks, partnerBid, partnerTricks, oppBid, oppTricks, botHand, currentTrick = [], spadesBroken = true }) {
+    const mode = GAME_MODES[4];
+    const players = [
+      { id: 'bot', team: 1, seatIndex: 0 },
+      { id: 'opp1', team: 2, seatIndex: 1 },
+      { id: 'partner', team: 1, seatIndex: 2 },
+      { id: 'opp2', team: 2, seatIndex: 3 },
+    ];
+    const lookup = buildTeamLookup(mode, players);
+    const opp1Bid = Math.ceil(oppBid / 2);
+    const opp2Bid = oppBid - opp1Bid;
+    const opp1Tricks = Math.ceil(oppTricks / 2);
+    const opp2Tricks = oppTricks - opp1Tricks;
+    return {
+      currentTrick,
+      bids: { bot: botBid, partner: partnerBid, opp1: opp1Bid, opp2: opp2Bid },
+      tricksTaken: { bot: botTricks, partner: partnerTricks, opp1: opp1Tricks, opp2: opp2Tricks },
+      players,
+      spadesBroken,
+      teamLookup: lookup,
+      mode,
+      cardsPlayed: [],
+      scores: { team1: 100, team2: 100 },
+      books: { team1: 0, team2: 0 },
+      settings: { ...DEFAULT_GAME_SETTINGS },
+    };
+  }
+
+  it('bot ducks when team bid is met even if personally short', () => {
+    // Bot bid 4, took 2. Partner bid 3, took 5. Team: bid 7, taken 7. Made!
+    // Bot has Ace of Hearts (high card) — should NOT aggressively lead it.
+    // With 4 free tricks left, duck disposition should dominate.
+    const hand = [
+      { suit: 'H', rank: 'A', mega: false },
+      { suit: 'D', rank: '3', mega: false },
+      { suit: 'C', rank: '4', mega: false },
+      { suit: 'S', rank: '2', mega: false },
+    ];
+    const gs = makeTeamBidState({
+      botBid: 4, botTricks: 2, partnerBid: 3, partnerTricks: 5,
+      oppBid: 2, oppTricks: 2, botHand: hand,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should NOT lead Ace of Hearts when ducking — should lead a low card
+    assert.notEqual(card.rank, 'A', `Team bid met — bot should duck, not lead Ace (played ${card.rank} of ${card.suit})`);
+  });
+
+  it('bot does NOT duck when team bid is NOT met', () => {
+    // Bot bid 4, took 2. Partner bid 3, took 1. Team: bid 7, taken 3. Need 4 more!
+    // Bot should play to win, not duck.
+    const hand = [
+      { suit: 'H', rank: 'A', mega: false },
+      { suit: 'D', rank: '3', mega: false },
+      { suit: 'C', rank: '4', mega: false },
+      { suit: 'S', rank: '2', mega: false },
+    ];
+    const gs = makeTeamBidState({
+      botBid: 4, botTricks: 2, partnerBid: 3, partnerTricks: 1,
+      oppBid: 2, oppTricks: 2, botHand: hand,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    // When team still needs tricks and bot is short, should lead a winner
+    assert.equal(card.rank, 'A', `Team needs tricks — bot should lead Ace (played ${card.rank} of ${card.suit})`);
+  });
+
+  it('bot avoids trumping when team bid is met and following cant-follow', () => {
+    // Team bid met. Opponent leads Hearts, bot has no Hearts but has spades.
+    // Should shed a non-spade card instead of trumping.
+    const hand = [
+      { suit: 'S', rank: 'Q', mega: false },
+      { suit: 'D', rank: '5', mega: false },
+      { suit: 'C', rank: '6', mega: false },
+    ];
+    const currentTrick = [
+      { playerId: 'opp1', card: { suit: 'H', rank: '7', mega: false } },
+    ];
+    const gs = makeTeamBidState({
+      botBid: 3, botTricks: 2, partnerBid: 3, partnerTricks: 4,
+      oppBid: 3, oppTricks: 2, botHand: hand, currentTrick,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Team bid is met (6 >= 6). Bot should NOT trump — shed off-suit instead
+    assert.notEqual(card.suit, 'S', `Team bid met — should not trump (played ${card.rank} of ${card.suit})`);
   });
 });
 

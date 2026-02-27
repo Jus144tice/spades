@@ -49,8 +49,9 @@ export function botPlayCard(hand, gameState, botId) {
   const opp1IsNil = opp1Id ? opp1Bid === 0 : false;
   const opp2IsNil = opp2Id ? opp2Bid === 0 : false;
   const seatPosition = currentTrick.length;
-  const botStillNeeds = Math.max(0, (botBidVal || 0) - botTricks);
+  let botStillNeeds = Math.max(0, (botBidVal || 0) - botTricks);
 
+  const tricksPerRound = mode ? mode.tricksPerRound : 13;
   const memory = buildCardMemory(hand, gameState, botId, mode);
 
   const ctx = {
@@ -58,10 +59,17 @@ export function botPlayCard(hand, gameState, botId) {
     opp1IsNil, opp2IsNil, teamTricks, teamBid, oppTricks, oppBid,
     botTricks, botBidVal, partnerId, players, botIndex,
     opp1Id, opp2Id, opponentIds, seatPosition, partnerBid, partnerTricks,
-    botStillNeeds,
+    botStillNeeds, tricksPerRound,
     memory,
     rawCardsPlayed: gameState.cardsPlayed || [],
   };
+
+  // Once team bid is met, personal shortfall is irrelevant — focus on team strategy
+  // (duck to avoid books, or set opponents). Don't chase personal bid when partner covered it.
+  if (!needMore) {
+    botStillNeeds = 0;
+    ctx.botStillNeeds = 0;
+  }
 
   // Nil-bust context: track which opponent bid nil and if they're already busted
   ctx.nilOppId = null;
@@ -118,7 +126,6 @@ export function botPlayCard(hand, gameState, botId) {
   // Check if opponents are about to win — override disposition for survival
   ctx.desperateSet = false;
   ctx.desperateBookDump = false;
-  const tricksPerRound = mode ? mode.tricksPerRound : 13;
 
   if (gameState.scores && botId) {
     const opponentBids = opponentIds.map(id => bids[id] || 0);

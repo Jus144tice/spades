@@ -9,7 +9,7 @@ import { countGuaranteedWinners, isMasterCard } from './memory.js';
 
 export function calculateDisposition(hand, ctx) {
   const totalBids = ctx.teamBid + ctx.oppBid;
-  const tricksPerRound = ctx.players ? ctx.players.length : 13; // each player = 1 trick per round in standard play
+  const tricksPerRound = ctx.tricksPerRound || 13;
   const freeTricks = tricksPerRound - totalBids; // "free" tricks nobody bid on
 
   // Base disposition from free tricks
@@ -117,7 +117,7 @@ export function calculateDisposition(hand, ctx) {
 
 // Guess whether opponents are in SET mode or DUCK mode (avoiding books)
 export function estimateOpponentDisposition(currentTrick, ctx) {
-  const tricksPerRound = ctx.players ? ctx.players.length : 13;
+  const tricksPerRound = ctx.tricksPerRound || 13;
   const totalBids = ctx.teamBid + ctx.oppBid;
   const freeTricks = tricksPerRound - totalBids;
 

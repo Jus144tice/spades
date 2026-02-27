@@ -230,8 +230,26 @@ export default function GameScreen() {
         <div className="spectating-banner">Spectating</div>
       )}
 
-      {/* Pause overlay */}
-      {state.gamePaused && (
+      {/* Pause overlay — host-initiated pause */}
+      {state.gamePaused && state.pausedByHost && (
+        <div className="pause-overlay">
+          <div className="pause-overlay-content">
+            <h2 className="pause-title">Game Paused</h2>
+            <p className="pause-reason">Paused by the host</p>
+            {state.isHost && (
+              <button className="btn btn-primary resume-btn" onClick={() => socket.emit('unpause_game')}>
+                Resume Game
+              </button>
+            )}
+            {!state.isHost && (
+              <p className="pause-hint">Waiting for the host to resume...</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Pause overlay — disconnect pause (vacant seats) */}
+      {state.gamePaused && !state.pausedByHost && (
         <div className="pause-overlay">
           <div className="pause-overlay-content">
             <h2 className="pause-title">Game Paused</h2>
@@ -269,6 +287,22 @@ export default function GameScreen() {
             )}
           </div>
         </div>
+      )}
+
+      {/* I'm Back button — shown when current player is AFK */}
+      {!isSpectator && state.afkPlayers[state.playerId] && (
+        <div className="im-back-container">
+          <button className="im-back-btn" onClick={() => socket.emit('cancel_afk')}>
+            I'm Back
+          </button>
+        </div>
+      )}
+
+      {/* Host pause button — during active play, not already paused */}
+      {state.isHost && !state.gamePaused && !state.gameOverData && !state.roundSummary && (
+        <button className="pause-game-btn" onClick={() => socket.emit('pause_game')}>
+          Pause
+        </button>
       )}
 
       {/* Leave room button — hidden during pause and game over */}

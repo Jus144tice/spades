@@ -14,7 +14,7 @@ import { getMode } from './game/modes.js';
 import { teamKeyToNum } from './game/modeHelpers.js';
 import {
   getAfkState, getPlayerAfk, getPlayerTimeout, resetPlayerAfk, incrementAfk,
-  clearTurnTimer, clearRoundTimers, cleanupAfkState, remapPlayerAfk,
+  clearTurnTimer, clearRoundTimers, clearGameOverTimer, cleanupAfkState, remapPlayerAfk,
 } from './afkManager.js';
 import { log, error } from './logger.js';
 
@@ -144,6 +144,7 @@ export function registerHandlers(io, socket) {
         gameInProgress: true,
         gameState: { ...gameState, isSpectator: true },
         paused: result.lobby.paused,
+        pausedByHost: result.lobby.pausedByHost || false,
         vacantSeats: result.lobby.vacantSeats,
       });
     } else {
@@ -426,6 +427,78 @@ export function registerHandlers(io, socket) {
     lobby.game.playerPreferences[info.playerId] = mergeWithDefaults(preferences || {});
   });
 
+  // --- Host pause / unpause ---
+  socket.on('pause_game', () => {
+    requireHost(socket, 'pause the game', (info, lobby) => {
+      if (!lobby.game) return;
+      if (lobby.paused) {
+        socket.emit('error_msg', { message: 'Game is already paused' });
+        return;
+      }
+      if (lobby.game.phase === 'gameOver') return;
+
+      lobby.paused = true;
+      lobby.pausedByHost = true;
+
+      clearTurnTimer(info.lobbyCode);
+      clearRoundTimers(info.lobbyCode);
+      clearGameOverTimer(info.lobbyCode);
+
+      io.to(info.lobbyCode).emit('turn_timer_clear');
+
+      const hostPlayer = lobby.players.find(p => p.id === socket.id);
+      const hostName = hostPlayer?.name || 'Host';
+      io.to(info.lobbyCode).emit('game_paused', {
+        reason: `Paused by ${hostName}`,
+        pausedByHost: true,
+        vacantSeats: lobby.vacantSeats,
+      });
+
+      const msg = addChatMessage(info.lobbyCode, null, `${hostName} paused the game`);
+      io.to(info.lobbyCode).emit('chat_message', msg);
+    });
+  });
+
+  socket.on('unpause_game', () => {
+    requireHost(socket, 'resume the game', (info, lobby) => {
+      if (!lobby.game) return;
+      if (!lobby.paused) return;
+      if (lobby.vacantSeats.length > 0) {
+        socket.emit('error_msg', { message: 'Cannot resume — vacant seats must be filled first' });
+        return;
+      }
+
+      lobby.paused = false;
+      lobby.pausedByHost = false;
+
+      io.to(info.lobbyCode).emit('game_resumed');
+
+      const hostPlayer = lobby.players.find(p => p.id === socket.id);
+      const hostName = hostPlayer?.name || 'Host';
+      const msg = addChatMessage(info.lobbyCode, null, `${hostName} resumed the game`);
+      io.to(info.lobbyCode).emit('chat_message', msg);
+
+      // Restart appropriate timers
+      const phase = lobby.game.phase;
+      if (phase === 'bidding' || phase === 'playing') {
+        scheduleBotTurn(io, info.lobbyCode);
+      } else if (phase === 'scoring') {
+        startRoundSummaryTimers(io, info.lobbyCode);
+      } else if (phase === 'gameOver') {
+        startGameOverTimer(io, info.lobbyCode);
+      }
+    });
+  });
+
+  // --- AFK cancel ---
+  socket.on('cancel_afk', () => {
+    const info = getPlayerInfo(socket.id);
+    if (!info) return;
+    const lobby = getLobby(info.lobbyCode);
+    if (!lobby?.game) return;
+    resetPlayerAfk(io, info.lobbyCode, socket.id);
+  });
+
   // --- Rejoin after reconnection ---
   socket.on('rejoin', ({ lobbyCode }) => {
     const userId = socket.userId;
@@ -517,6 +590,7 @@ export function registerHandlers(io, socket) {
         chatLog: lobby.chatLog, roundSummary, gameOverData,
         isSpectator: !isGamePlayer, gameSettings: lobby.gameSettings,
         gamePaused: lobby.paused,
+        pausedByHost: lobby.pausedByHost || false,
         vacantSeats: lobby.vacantSeats,
         ...gameState,
       });
@@ -571,6 +645,7 @@ export function registerHandlers(io, socket) {
 
     if (result.resumed) {
       lobby.paused = false;
+      lobby.pausedByHost = false;
       io.to(info.lobbyCode).emit('game_resumed');
       broadcastGameState(io, lobby, 'game_state_sync');
       scheduleBotTurn(io, info.lobbyCode);
@@ -604,6 +679,7 @@ export function registerHandlers(io, socket) {
 
       if (result.resumed) {
         lobby.paused = false;
+        lobby.pausedByHost = false;
         io.to(info.lobbyCode).emit('game_resumed');
         broadcastGameState(io, lobby, 'game_state_sync');
         scheduleBotTurn(io, info.lobbyCode);
@@ -656,6 +732,7 @@ export function registerHandlers(io, socket) {
 function returnToLobby(io, lobbyCode, lobby) {
   lobby.game = null;
   lobby.paused = false;
+  lobby.pausedByHost = false;
   lobby.vacantSeats = [];
   for (const p of lobby.players) p.team = null;
   io.to(lobbyCode).emit('returned_to_lobby', { players: lobby.players });

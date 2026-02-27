@@ -40,6 +40,7 @@ export const initialState = {
   cardsRevealed: false,
   roomList: [],
   gamePaused: false,
+  pausedByHost: false,
   vacantSeats: [],
   playerCount: 4,
   mode: null,
@@ -101,6 +102,7 @@ export function gameReducer(state, action) {
           roundHistory: action.data.gameState.roundHistory || [],
           isSpectator: true,
           gamePaused: action.data.paused || false,
+          pausedByHost: action.data.pausedByHost || false,
           vacantSeats: action.data.vacantSeats || [],
           playerCount: action.data.gameState.playerCount || action.data.players.length,
           mode: action.data.gameState.mode || null,
@@ -362,10 +364,10 @@ export function gameReducer(state, action) {
       return { ...state, roomList: action.data };
 
     case 'GAME_PAUSED':
-      return { ...state, gamePaused: true, vacantSeats: action.data.vacantSeats, disconnectedPlayers: {} };
+      return { ...state, gamePaused: true, pausedByHost: action.data.pausedByHost || false, vacantSeats: action.data.vacantSeats || [], disconnectedPlayers: {} };
 
     case 'GAME_RESUMED':
-      return { ...state, gamePaused: false, vacantSeats: [] };
+      return { ...state, gamePaused: false, pausedByHost: false, vacantSeats: [] };
 
     case 'SEAT_FILLED':
       return {
@@ -393,6 +395,7 @@ export function gameReducer(state, action) {
         isSpectator: action.data.isSpectator || false,
         gameSettings: action.data.gameSettings || state.gameSettings,
         gamePaused: false,
+        pausedByHost: false,
         vacantSeats: [],
         playerCount: action.data.playerCount || action.data.players.length,
         mode: action.data.mode || null,
@@ -444,6 +447,7 @@ export function gameReducer(state, action) {
           cardsRevealed: true,
           reconnecting: false,
           gamePaused: d.gamePaused || false,
+          pausedByHost: d.pausedByHost || false,
           vacantSeats: d.vacantSeats || [],
           playerCount: d.playerCount || d.players.length,
           mode: d.mode || null,
