@@ -435,8 +435,8 @@ describe('Scoring', () => {
     const result = scoreRound(players4, bids, tricks, scores, books, DEFAULT_GAME_SETTINGS, new Set(), mode4, lookup4);
 
     // Team 1: p1 nil failed (-100), p3 bid 5, effective tricks = 4 + 2 (failed nil) = 6 = made (+51)
-    // Total: -100 + 51 = -49
-    assert.equal(result.team1.roundScore, -49);
+    // Raw: -100 + 51 = -49. Convention: -50 base + 1 book = -51.
+    assert.equal(result.team1.roundScore, -51);
     assert.equal(result.team1.books, 1);
   });
 
@@ -449,8 +449,8 @@ describe('Scoring', () => {
     const result = scoreRound(players4, bids, tricks, scores, books, DEFAULT_GAME_SETTINGS, new Set(), mode4, lookup4);
 
     // Team 1: bid 6, took 7 = +61, but books go from 9 to 10 = -100 penalty
-    // Total: 61 - 100 = -39, books reset to 0
-    assert.equal(result.team1.roundScore, -39);
+    // Raw: 61 - 100 = -39. Convention: -40 base + 1 book = -41. Books reset to 0.
+    assert.equal(result.team1.roundScore, -41);
     assert.equal(result.team1.books, 0);
   });
 
@@ -496,7 +496,7 @@ describe('Scoring', () => {
     assert.equal(r1.team1.newTotal, -80);
     assert.equal(r1.team1.books, 0);
 
-    // Round 2: team makes with overtricks while still negative
+    // Round 2: team makes with overtricks while still negative (books ≠ 5)
     const bids2 = { p1: 3, p2: 3, p3: 3, p4: 4 };
     const tricks2 = { p1: 4, p2: 4, p3: 4, p4: 1 };
     const scores2 = { team1: r1.team1.newTotal, team2: r1.team2.newTotal };
@@ -519,6 +519,37 @@ describe('Scoring', () => {
     assert.equal(r3.team1.books, 4);
     assert.equal(r3.team1.newTotal, 54);
     assert.equal(Math.abs(r3.team1.newTotal) % 10, r3.team1.books);
+  });
+
+  it('negative total with 5 books: convention applies to tens digits too', () => {
+    // Nil fail + partner makes bid with 5 overtricks (books = 5)
+    // -75 = -70 base + 5 books. The base (-100 nil + 30 bid = -70) must be
+    // correctly represented in the tens digits, not just the ones digit.
+    const bids = { p1: 0, p2: 4, p3: 3, p4: 3 };
+    const tricks = { p1: 2, p2: 4, p3: 6, p4: 1 };
+    const scores = { team1: 0, team2: 0 };
+    const books = { team1: 0, team2: 0 };
+    const r1 = scoreRound(players4, bids, tricks, scores, books, DEFAULT_GAME_SETTINGS, new Set(), mode4, lookup4);
+    // Team 1: p1 nil fail (-100, 2 tricks), p3 bid 3 took 6
+    // failedNilTricks=2, combinedBid=3, partnerTricks=6, effectiveTricks=8
+    // Bid made: +30 + 5 overtricks = +35. Raw = -65. Convention = -75.
+    assert.equal(r1.team1.roundScore, -75);
+    assert.equal(r1.team1.books, 5);
+    assert.equal(r1.team1.newTotal, -75);
+    assert.equal(Math.abs(r1.team1.newTotal) % 10, r1.team1.books);
+
+    // Round 2 from books=5 negative score: verify reverse works correctly
+    const bids2 = { p1: 4, p2: 4, p3: 3, p4: 2 };
+    const tricks2 = { p1: 5, p2: 3, p3: 5, p4: 0 };
+    const scores2 = { team1: r1.team1.newTotal, team2: r1.team2.newTotal };
+    const books2 = { team1: r1.team1.books, team2: r1.team2.books };
+    const r2 = scoreRound(players4, bids2, tricks2, scores2, books2, DEFAULT_GAME_SETTINGS, new Set(), mode4, lookup4);
+    // Team 1: bid 7, took 10 → +73, 3 more books. Books 5+3=8.
+    // rawOld = -75 + 10 = -65 (reverse). rawTotal = -65 + 73 = 8.
+    // Positive → no adjustment. books=8, ones digit = 8. ✓
+    assert.equal(r2.team1.books, 8);
+    assert.equal(r2.team1.newTotal, 8);
+    assert.equal(Math.abs(r2.team1.newTotal) % 10, r2.team1.books);
   });
 
   it('checkWinner handles ties (play another round)', () => {

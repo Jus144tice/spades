@@ -915,8 +915,8 @@ describe('Scoring - Edge Cases', () => {
 
     // p1 blind nil failed: -200 (BLIND_NIL_BONUS penalty)
     // p3 bid 5, effective = 4 + 2 (failed nil) = 6 => made, +51
-    // Total: -200 + 51 = -149
-    assert.equal(result.team1.roundScore, -149);
+    // Raw: -200 + 51 = -149. Convention: -150 base + 1 book = -151.
+    assert.equal(result.team1.roundScore, -151);
   });
 
   it('all-nil team both fail', () => {
@@ -930,8 +930,8 @@ describe('Scoring - Edge Cases', () => {
     // Team 1: both nil, both failed
     // p1: -100, p3: -100
     // No non-nil bids, failed nil tricks become books AND add to score ones digit
-    // Total: -200 + 3 = -197, books = 3 (1 + 2)
-    assert.equal(result.team1.roundScore, -197);
+    // Raw: -200 + 3 = -197. Convention: -200 base + 3 books = -203.
+    assert.equal(result.team1.roundScore, -203);
     assert.equal(result.team1.books, 3);
   });
 
@@ -1006,8 +1006,9 @@ describe('Scoring - Edge Cases', () => {
 
     // Team 1: bid 2, took 10 => made (+20), 8 overtricks
     // Books: 3 + 8 = 11 >= 10 => penalty -100, books reset to 1
+    // Raw: 20 + 8 - 100 = -72. Convention: -80 base + 8 books = -88.
     assert.equal(result.team1.books, 1);
-    assert.equal(result.team1.roundScore, 20 + 8 - 100); // -72
+    assert.equal(result.team1.roundScore, -88);
   });
 });
 

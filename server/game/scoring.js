@@ -42,6 +42,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
     const nilPlayers = playerIds.filter(id => bids[id] === 0);
     const nonNilPlayers = playerIds.filter(id => bids[id] > 0);
     let failedNilTricks = 0;
+    let roundOvertricks = 0; // tracks this round's book-contributing tricks
 
     // Score nil bids individually
     for (const pid of nilPlayers) {
@@ -70,6 +71,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
         const overtricks = effectiveTricks - combinedBid;
         roundScore += overtricks;
         books += overtricks;
+        roundOvertricks += overtricks;
       } else {
         // Bid missed — spoiler gets double penalty
         roundScore -= combinedBid * 10 * multiplier;
@@ -78,6 +80,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
       // All players on team bid nil and at least one failed - those tricks are books
       roundScore += failedNilTricks;
       books += failedNilTricks;
+      roundOvertricks += failedNilTricks;
     }
 
     // 10+ trick bonus: must bid 10+ combined AND make bid — spoiler gets double
@@ -96,24 +99,31 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
 
     // Ones-digit convention: the ones digit of the total score always
     // represents the book count, even when the score is negative.
-    //   53 = base  50 + 3 books
-    //  -53 = base -50 - 3 books  (NOT -50 + 3 = -47)
+    //   53 = base  50 + 3 books  (base 50 is in the tens digits)
+    //  -53 = base -50 + 3 books  (-(|base| + books), NOT -50 + 3 = -47)
     //
     // Internally, books are always added as +1.  The stored total uses a
-    // display adjustment so that the ones digit matches books.  When the
-    // raw total is negative, we subtract 2*books to flip the ones digit
-    // from (10 - books) to books.
+    // display adjustment so that both the ones digit AND the tens digits
+    // are correct.  raw - 2*books converts from raw (base + books) to
+    // display -(|base| + books) for negative totals.
     const oldScore = currentScores[teamKey] || 0;
     const oldBooks = currentBooks[teamKey] || 0;
     // Reverse the display adjustment on the previous total to recover the
     // raw (books-always-positive) score for clean arithmetic.
-    const rawOldScore = oldScore < 0 ? oldScore + 2 * oldBooks : oldScore;
+    const rawOldScore = oldScore < 0 && oldBooks > 0
+      ? oldScore + 2 * oldBooks : oldScore;
     const rawTotal = rawOldScore + roundScore;
-    // Apply display adjustment: ensure ones digit equals book count.
-    const newTotal = rawTotal < 0 && books > 0 ? rawTotal - 2 * books : rawTotal;
+    // Apply display adjustment for negative totals with books.
+    const newTotal = rawTotal < 0 && books > 0
+      ? rawTotal - 2 * books : rawTotal;
+
+    // Apply the same ones-digit convention to the round score so the user
+    // sees consistent values (e.g. -73 not -67 for -70 base + 3 books).
+    const displayRoundScore = roundScore < 0 && roundOvertricks > 0
+      ? roundScore - 2 * roundOvertricks : roundScore;
 
     result[teamKey] = {
-      roundScore,
+      roundScore: displayRoundScore,
       newTotal,
       books,
       isSpoiler,
