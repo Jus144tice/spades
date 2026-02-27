@@ -957,8 +957,18 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
   // Never trump partner's winning card (with exceptions)
   if (winnerIsPartner) {
     const disp = ctx.disposition || 0;
+    const notLastToPlay = ctx.seatPosition < (ctx.players?.length || 4) - 1;
 
     if (ctx.urgentBid && ctx.seatPosition === 2 && !winningCardIsMaster) {
+      if (spades.length > 0 && ledSuit !== 'S') {
+        const beaten = trumpBeaters(spades, currentTrick);
+        if (beaten) return beaten;
+      }
+    }
+
+    // SET mode: trump over partner's vulnerable card to guarantee the trick
+    // Only when opponents can still overtake and partner's card isn't boss
+    if (ctx.setMode && notLastToPlay && !winningCardIsMaster) {
       if (spades.length > 0 && ledSuit !== 'S') {
         const beaten = trumpBeaters(spades, currentTrick);
         if (beaten) return beaten;
