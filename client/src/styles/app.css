@@ -672,23 +672,34 @@ body {
     max-width: 95%;
   }
 
-  .sort-option-row {
+  .sort-row {
     flex-wrap: wrap;
     gap: 6px;
   }
 
-  .sort-option-label {
+  .sort-label {
     min-width: auto;
     width: 100%;
   }
 
-  .suit-order-icon {
-    font-size: 18px;
+  .suit-chip {
+    font-size: 22px;
+    min-width: 26px;
+  }
+
+  .suit-swap-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
   }
 
   .sort-toggle-btn {
     padding: 4px 10px;
     font-size: 11px;
+  }
+
+  .sort-rank-label {
+    font-size: 12px;
   }
 
   .preview-card {
@@ -795,63 +806,95 @@ body {
   font-size: 16px;
 }
 
-/* Card sort customization */
-.sort-custom-section {
-  margin-top: 12px;
+/* Card sort controls */
+.sort-controls {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  margin-top: 10px;
 }
 
-.sort-option-row {
+.sort-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.sort-option-label {
+.sort-label {
   font-size: 12px;
   color: var(--text-secondary);
-  min-width: 70px;
+  min-width: 68px;
   flex-shrink: 0;
 }
 
-.suit-order-controls {
+/* Suit reorder row */
+.suit-reorder {
   display: flex;
+  align-items: center;
   gap: 4px;
 }
 
-.suit-order-item {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.suit-order-icon {
-  font-size: 20px;
-  min-width: 24px;
+.suit-chip {
+  font-size: 26px;
+  line-height: 1;
+  min-width: 32px;
   text-align: center;
 }
 
-.suit-arrow {
-  background: none;
-  border: none;
+.suit-swap-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 8px;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   cursor: pointer;
-  padding: 2px;
-  opacity: 0.6;
-  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+  flex-shrink: 0;
 }
 
-.suit-arrow:hover:not(:disabled) {
-  opacity: 1;
+.suit-swap-btn:hover {
+  background: rgba(79, 195, 247, 0.15);
+  border-color: var(--accent);
   color: var(--accent);
 }
 
-.suit-arrow:disabled {
-  opacity: 0.15;
-  cursor: default;
+/* Rank toggle checkbox */
+.sort-rank-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sort-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--accent);
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.sort-checkbox.checked {
+  background: rgba(79, 195, 247, 0.2);
+  border-color: var(--accent);
+}
+
+.sort-rank-label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .sort-toggle-group {

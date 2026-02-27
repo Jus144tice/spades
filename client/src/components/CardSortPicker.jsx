@@ -1,12 +1,5 @@
 import React from 'react';
 
-const PRESETS = [
-  { key: 'hearts',     label: 'Hearts',          value: 'C,D,S,H:asc',  desc: 'Clubs, Diamonds, Spades, Hearts — low to high' },
-  { key: 'spadesFirst', label: 'Spades First',    value: 'S,H,D,C:desc', desc: 'Spades first — high to low' },
-  { key: 'bridge',     label: 'Bridge',           value: 'S,H,D,C:asc',  desc: 'Bridge suit order — low to high' },
-  { key: 'highFirst',  label: 'High Cards First', value: 'C,D,S,H:desc', desc: 'Same as Hearts — high to low' },
-];
-
 const SUIT_SYMBOLS = { C: '\u2663', D: '\u2666', S: '\u2660', H: '\u2665' };
 const SUIT_COLORS = { C: '#4a7c59', D: '#4fc3f7', S: '#e8eaed', H: '#ef5350' };
 const RANK_VALUE = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
@@ -25,7 +18,6 @@ function buildSortString(suits, dir, primary) {
 }
 
 function generatePreview(suits, dir, primary) {
-  // Generate a sample hand: varied ranks across suits
   const sampleRanks = ['3', '7', 'J', 'A', '5', 'Q', '9', '2'];
   const cards = [];
   suits.forEach((suit, i) => {
@@ -52,17 +44,14 @@ function generatePreview(suits, dir, primary) {
   return cards;
 }
 
-function moveSuit(suits, index, direction) {
+function swapSuits(suits, index) {
   const newSuits = [...suits];
-  const target = index + direction;
-  if (target < 0 || target >= 4) return newSuits;
-  [newSuits[index], newSuits[target]] = [newSuits[target], newSuits[index]];
+  [newSuits[index], newSuits[index + 1]] = [newSuits[index + 1], newSuits[index]];
   return newSuits;
 }
 
 export default function CardSortPicker({ value, onChange }) {
   const { suits, dir, primary } = parseSortString(value);
-  const isPreset = PRESETS.some(p => p.value === value);
   const preview = generatePreview(suits, dir, primary);
 
   const update = (newSuits, newDir, newPrimary) => {
@@ -73,47 +62,9 @@ export default function CardSortPicker({ value, onChange }) {
     <div className="pref-section">
       <h3 className="pref-section-title">Card Sort Order</h3>
 
-      <div className="preset-buttons">
-        {PRESETS.map(p => (
-          <button
-            key={p.key}
-            className={`preset-btn ${value === p.value ? 'selected' : ''}`}
-            onClick={() => onChange(p.value)}
-            title={p.desc}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="sort-custom-section">
-        <div className="sort-option-row">
-          <span className="sort-option-label">Suit order</span>
-          <div className="suit-order-controls">
-            {suits.map((suit, i) => (
-              <div key={suit} className="suit-order-item">
-                <button
-                  className="suit-arrow"
-                  onClick={() => update(moveSuit(suits, i, -1))}
-                  disabled={i === 0}
-                  aria-label={`Move ${suit} left`}
-                >{'\u25C0'}</button>
-                <span className="suit-order-icon" style={{ color: SUIT_COLORS[suit] }}>
-                  {SUIT_SYMBOLS[suit]}
-                </span>
-                <button
-                  className="suit-arrow"
-                  onClick={() => update(moveSuit(suits, i, 1))}
-                  disabled={i === 3}
-                  aria-label={`Move ${suit} right`}
-                >{'\u25B6'}</button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="sort-option-row">
-          <span className="sort-option-label">Card order</span>
+      <div className="sort-controls">
+        <div className="sort-row">
+          <span className="sort-label">Direction</span>
           <div className="sort-toggle-group">
             <button
               className={`sort-toggle-btn ${dir === 'asc' ? 'selected' : ''}`}
@@ -126,18 +77,33 @@ export default function CardSortPicker({ value, onChange }) {
           </div>
         </div>
 
-        <div className="sort-option-row">
-          <span className="sort-option-label">Group by</span>
-          <div className="sort-toggle-group">
-            <button
-              className={`sort-toggle-btn ${primary === 'suit' ? 'selected' : ''}`}
-              onClick={() => update(null, null, 'suit')}
-            >Suit</button>
-            <button
-              className={`sort-toggle-btn ${primary === 'rank' ? 'selected' : ''}`}
-              onClick={() => update(null, null, 'rank')}
-            >Rank</button>
+        <div className="sort-row">
+          <span className="sort-label">Suit order</span>
+          <div className="suit-reorder">
+            {suits.map((suit, i) => (
+              <React.Fragment key={suit}>
+                <span className="suit-chip" style={{ color: SUIT_COLORS[suit] }}>
+                  {SUIT_SYMBOLS[suit]}
+                </span>
+                {i < 3 && (
+                  <button
+                    className="suit-swap-btn"
+                    onClick={() => update(swapSuits(suits, i))}
+                    aria-label={`Swap ${suit} and ${suits[i + 1]}`}
+                  >{'\u21C4'}</button>
+                )}
+              </React.Fragment>
+            ))}
           </div>
+        </div>
+
+        <div className="sort-row">
+          <label className="sort-rank-toggle" onClick={() => update(null, null, primary === 'rank' ? 'suit' : 'rank')}>
+            <span className={`sort-checkbox ${primary === 'rank' ? 'checked' : ''}`}>
+              {primary === 'rank' ? '\u2713' : ''}
+            </span>
+            <span className="sort-rank-label">Sort by rank instead of suit</span>
+          </label>
         </div>
       </div>
 
