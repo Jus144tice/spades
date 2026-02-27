@@ -23,8 +23,8 @@ export default function SettingsModal({ onClose }) {
       // Notify server so mid-game preference changes take effect next round
       if (socket) socket.emit('update_preferences', { preferences: saved });
       onClose();
-    } catch {
-      setSaveError('Failed to save. Please try again.');
+    } catch (err) {
+      setSaveError(err?.message || 'Failed to save. Please try again.');
       setSaving(false);
     }
   };

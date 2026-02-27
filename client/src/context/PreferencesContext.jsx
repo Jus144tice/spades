@@ -31,8 +31,8 @@ export function PreferencesProvider({ children }) {
     }
 
     if (user.isGuest) {
-      // Load guest preferences from localStorage
-      const guestPrefs = loadGuestPrefs();
+      // Load guest preferences from localStorage, fall back to defaults from loginAsGuest
+      const guestPrefs = loadGuestPrefs() || user.preferences || null;
       if (guestPrefs) {
         setPreferences(guestPrefs);
         applyTableColor(guestPrefs.tableColor);
@@ -43,13 +43,13 @@ export function PreferencesProvider({ children }) {
       setPreferences(user.preferences);
       applyTableColor(user.preferences.tableColor);
     }
-    setSetupDone(prev => user.isGuest ? (loadGuestPrefs() ? true : prev) : (user.hasCompletedSetup ?? false));
+    setSetupDone(prev => user.isGuest ? true : (user.hasCompletedSetup ?? false));
     setLoading(false);
   }, [user]);
 
   const updatePreferences = useCallback(async (newPrefs) => {
-    // Guests: update local state + localStorage
-    if (user?.isGuest) {
+    // Guests (or no user): update local state + localStorage
+    if (!user || user.isGuest) {
       const merged = { ...(preferences || {}), ...newPrefs };
       setPreferences(merged);
       setSetupDone(true);
@@ -57,22 +57,23 @@ export function PreferencesProvider({ children }) {
       saveGuestPrefs(merged);
       return merged;
     }
-    try {
-      const res = await fetch('/api/preferences', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
-        body: JSON.stringify(newPrefs),
-      });
-      if (!res.ok) throw new Error('Failed to save preferences');
-      const data = await res.json();
-      setPreferences(data.preferences);
-      setSetupDone(true);
-      applyTableColor(data.preferences.tableColor);
-      return data.preferences;
-    } catch (err) {
-      console.error('Failed to update preferences:', err);
-      throw err;
+    const res = await fetch('/api/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+      body: JSON.stringify(newPrefs),
+    });
+    if (!res.ok) {
+      const status = res.status;
+      const msg = status === 401 ? 'Session expired — please refresh'
+        : status === 403 ? 'Security token expired — please refresh'
+        : 'Server error';
+      throw new Error(msg);
     }
+    const data = await res.json();
+    setPreferences(data.preferences);
+    setSetupDone(true);
+    applyTableColor(data.preferences.tableColor);
+    return data.preferences;
   }, [user, preferences]);
 
   return (
