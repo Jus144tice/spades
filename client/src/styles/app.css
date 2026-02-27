@@ -995,8 +995,11 @@ body {
   background: #2e4459;
 }
 
-/* Shift fixed buttons left when desktop chat sidebar is open */
-.chat-shifted {
+.settings-btn.chat-shifted {
+  right: 336px;
+}
+
+.chat-toggle-btn.chat-shifted {
   right: 336px;
 }
 
