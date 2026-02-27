@@ -935,9 +935,16 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
   const currentWinner = getCurrentWinner(currentTrick);
   const winningCardIsMaster = isMasterCard(currentWinner.card, memory);
 
-  // Partner is nil: special handling
-  if (ctx.partnerIsNil) {
-    return discardWhenPartnerNil(hand, spades, nonSpade, currentTrick, ledSuit, currentWinner, ctx);
+  // Partner is nil: special handling — but only when partner needs active protection
+  // If nil is busted, penalty is locked in; play normally.
+  // If partner played and is safe (not winning), no protection needed; play normally.
+  if (ctx.partnerIsNil && !ctx.partnerNilBusted) {
+    const partnerPlayed = currentTrick.find(t => t.playerId === ctx.partnerId);
+    const partnerIsSafe = partnerPlayed && currentWinner.playerId !== ctx.partnerId;
+    if (!partnerIsSafe) {
+      return discardWhenPartnerNil(hand, spades, nonSpade, currentTrick, ledSuit, currentWinner, ctx);
+    }
+    // Partner is safe — fall through to normal play (bot may need tricks, set mode, etc.)
   }
 
   // Desperation book-dump: NEVER trump — let opponents take the trick
@@ -1036,7 +1043,8 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
 
   if (disp >= 1) {
     // Set (soft/hard): trump to take tricks
-    if (!winningCardIsMaster && spades.length > 0 && ledSuit !== 'S') {
+    // (trumpBeaters already returns null if no spade can beat the current highest trump)
+    if (spades.length > 0 && ledSuit !== 'S') {
       const beaten = trumpBeaters(spades, currentTrick);
       if (beaten) return beaten;
     }
