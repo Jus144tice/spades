@@ -22,15 +22,18 @@ const VALID_SUITS = new Set(['S', 'H', 'D', 'C']);
 const VALID_COLORS = new Set(TABLE_COLORS.map(c => c.value));
 
 /**
- * Parse a card sort string like "C,D,S,H:asc" into usable sort config.
- * Returns { suitOrder: { C: 0, D: 1, S: 2, H: 3 }, rankDirection: 'asc'|'desc' }
+ * Parse a card sort string like "C,D,S,H:asc" or "C,D,S,H:desc:rank" into usable sort config.
+ * Returns { suitOrder: { C: 0, D: 1, S: 2, H: 3 }, rankDirection: 'asc'|'desc', primarySort: 'suit'|'rank' }
  */
 export function parseCardSort(str) {
   if (!str || typeof str !== 'string') {
     return parseCardSort(DEFAULTS.cardSort);
   }
 
-  const [suitPart, direction] = str.split(':');
+  const parts = str.split(':');
+  const suitPart = parts[0];
+  const direction = parts[1];
+  const primary = parts[2];
   const suits = suitPart.split(',').map(s => s.trim().toUpperCase());
 
   // Validate: must be exactly 4 unique valid suits
@@ -39,10 +42,11 @@ export function parseCardSort(str) {
   }
 
   const rankDirection = direction === 'desc' ? 'desc' : 'asc';
+  const primarySort = primary === 'rank' ? 'rank' : 'suit';
   const suitOrder = {};
   suits.forEach((s, i) => { suitOrder[s] = i; });
 
-  return { suitOrder, rankDirection };
+  return { suitOrder, rankDirection, primarySort };
 }
 
 /**
@@ -58,7 +62,8 @@ export function validatePreferences(prefs) {
     const suits = Object.entries(parsed.suitOrder)
       .sort((a, b) => a[1] - b[1])
       .map(([s]) => s);
-    result.cardSort = `${suits.join(',')}:${parsed.rankDirection}`;
+    const primarySuffix = parsed.primarySort === 'rank' ? ':rank' : '';
+    result.cardSort = `${suits.join(',')}:${parsed.rankDirection}${primarySuffix}`;
   }
 
   if (prefs.tableColor && typeof prefs.tableColor === 'string') {

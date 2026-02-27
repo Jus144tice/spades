@@ -26,6 +26,7 @@ export default function Card({ card, onClick, disabled, small }) {
         <div className="card-rank">{card.rank}</div>
         <div className="card-suit">{SUIT_SYMBOLS[card.suit]}</div>
       </div>
+      {isMega && <div className="card-mega-banner card-mega-banner-bottom">MEGA</div>}
     </div>
   );
 }

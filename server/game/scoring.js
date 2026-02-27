@@ -76,6 +76,7 @@ export function scoreRound(players, bids, tricksTaken, currentScores, currentBoo
       }
     } else if (combinedBid === 0 && failedNilTricks > 0) {
       // All players on team bid nil and at least one failed - those tricks are books
+      roundScore += failedNilTricks;
       books += failedNilTricks;
     }
 

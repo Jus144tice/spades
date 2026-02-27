@@ -417,6 +417,15 @@ export function registerHandlers(io, socket) {
     returnToLobby(io, info.lobbyCode, lobby);
   });
 
+  socket.on('update_preferences', ({ preferences }) => {
+    const info = getPlayerInfo(socket.id);
+    if (!info) return;
+    const lobby = getLobby(info.lobbyCode);
+    if (!lobby?.game) return;
+    // Update the game's playerPreferences so next round uses new sort
+    lobby.game.playerPreferences[info.playerId] = mergeWithDefaults(preferences || {});
+  });
+
   // --- Rejoin after reconnection ---
   socket.on('rejoin', ({ lobbyCode }) => {
     const userId = socket.userId;

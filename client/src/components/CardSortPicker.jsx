@@ -9,36 +9,70 @@ const PRESETS = [
 
 const SUIT_SYMBOLS = { C: '\u2663', D: '\u2666', S: '\u2660', H: '\u2665' };
 const SUIT_COLORS = { C: '#4a7c59', D: '#4fc3f7', S: '#e8eaed', H: '#ef5350' };
-const SAMPLE_RANKS = ['3', '7', 'J', 'A', '5'];
+const RANK_VALUE = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
 
-function parseSortForPreview(sortStr) {
-  const [suitPart, dir] = sortStr.split(':');
-  const suits = suitPart.split(',');
-  // Generate a sample hand: one card of each suit + an extra
+function parseSortString(sortStr) {
+  const parts = (sortStr || 'C,D,S,H:asc').split(':');
+  const suits = parts[0].split(',');
+  const dir = parts[1] || 'asc';
+  const primary = parts[2] || 'suit';
+  return { suits, dir, primary };
+}
+
+function buildSortString(suits, dir, primary) {
+  const suffix = primary === 'rank' ? ':rank' : '';
+  return `${suits.join(',')}:${dir}${suffix}`;
+}
+
+function generatePreview(suits, dir, primary) {
+  // Generate a sample hand: varied ranks across suits
+  const sampleRanks = ['3', '7', 'J', 'A', '5', 'Q', '9', '2'];
   const cards = [];
   suits.forEach((suit, i) => {
-    cards.push({ suit, rank: SAMPLE_RANKS[i] });
+    cards.push({ suit, rank: sampleRanks[i] });
+    if (i < 2) cards.push({ suit, rank: sampleRanks[i + 4] });
   });
-  cards.push({ suit: suits[0], rank: SAMPLE_RANKS[4] });
 
-  // Sort them the same way the server would
   const suitOrder = {};
   suits.forEach((s, i) => { suitOrder[s] = i; });
-  const RANK_VALUE = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
   const mul = dir === 'desc' ? -1 : 1;
-  cards.sort((a, b) => {
-    if (suitOrder[a.suit] !== suitOrder[b.suit]) return suitOrder[a.suit] - suitOrder[b.suit];
-    return mul * (RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
-  });
+
+  if (primary === 'rank') {
+    cards.sort((a, b) => {
+      const rankDiff = mul * (RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
+      if (rankDiff !== 0) return rankDiff;
+      return suitOrder[a.suit] - suitOrder[b.suit];
+    });
+  } else {
+    cards.sort((a, b) => {
+      if (suitOrder[a.suit] !== suitOrder[b.suit]) return suitOrder[a.suit] - suitOrder[b.suit];
+      return mul * (RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
+    });
+  }
   return cards;
 }
 
+function moveSuit(suits, index, direction) {
+  const newSuits = [...suits];
+  const target = index + direction;
+  if (target < 0 || target >= 4) return newSuits;
+  [newSuits[index], newSuits[target]] = [newSuits[target], newSuits[index]];
+  return newSuits;
+}
+
 export default function CardSortPicker({ value, onChange }) {
-  const preview = parseSortForPreview(value || 'C,D,S,H:asc');
+  const { suits, dir, primary } = parseSortString(value);
+  const isPreset = PRESETS.some(p => p.value === value);
+  const preview = generatePreview(suits, dir, primary);
+
+  const update = (newSuits, newDir, newPrimary) => {
+    onChange(buildSortString(newSuits || suits, newDir || dir, newPrimary !== undefined ? newPrimary : primary));
+  };
 
   return (
     <div className="pref-section">
       <h3 className="pref-section-title">Card Sort Order</h3>
+
       <div className="preset-buttons">
         {PRESETS.map(p => (
           <button
@@ -51,6 +85,62 @@ export default function CardSortPicker({ value, onChange }) {
           </button>
         ))}
       </div>
+
+      <div className="sort-custom-section">
+        <div className="sort-option-row">
+          <span className="sort-option-label">Suit order</span>
+          <div className="suit-order-controls">
+            {suits.map((suit, i) => (
+              <div key={suit} className="suit-order-item">
+                <button
+                  className="suit-arrow"
+                  onClick={() => update(moveSuit(suits, i, -1))}
+                  disabled={i === 0}
+                  aria-label={`Move ${suit} left`}
+                >{'\u25C0'}</button>
+                <span className="suit-order-icon" style={{ color: SUIT_COLORS[suit] }}>
+                  {SUIT_SYMBOLS[suit]}
+                </span>
+                <button
+                  className="suit-arrow"
+                  onClick={() => update(moveSuit(suits, i, 1))}
+                  disabled={i === 3}
+                  aria-label={`Move ${suit} right`}
+                >{'\u25B6'}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="sort-option-row">
+          <span className="sort-option-label">Card order</span>
+          <div className="sort-toggle-group">
+            <button
+              className={`sort-toggle-btn ${dir === 'asc' ? 'selected' : ''}`}
+              onClick={() => update(null, 'asc')}
+            >Low {'\u2192'} High</button>
+            <button
+              className={`sort-toggle-btn ${dir === 'desc' ? 'selected' : ''}`}
+              onClick={() => update(null, 'desc')}
+            >High {'\u2192'} Low</button>
+          </div>
+        </div>
+
+        <div className="sort-option-row">
+          <span className="sort-option-label">Group by</span>
+          <div className="sort-toggle-group">
+            <button
+              className={`sort-toggle-btn ${primary === 'suit' ? 'selected' : ''}`}
+              onClick={() => update(null, null, 'suit')}
+            >Suit</button>
+            <button
+              className={`sort-toggle-btn ${primary === 'rank' ? 'selected' : ''}`}
+              onClick={() => update(null, null, 'rank')}
+            >Rank</button>
+          </div>
+        </div>
+      </div>
+
       <div className="card-preview">
         {preview.map((card, i) => (
           <div key={i} className="preview-card" style={{ color: SUIT_COLORS[card.suit] }}>

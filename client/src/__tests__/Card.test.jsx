@@ -55,7 +55,9 @@ describe('Card', () => {
 
   it('renders MEGA banner for mega cards', () => {
     render(<Card card={{ suit: 'S', rank: '2', mega: true }} />);
-    expect(screen.getByText('MEGA')).toBeInTheDocument();
+    const banners = screen.getAllByText('MEGA');
+    expect(banners).toHaveLength(2); // top and bottom banners
+    expect(banners[0]).toBeInTheDocument();
   });
 
   it('applies card-small class when small', () => {

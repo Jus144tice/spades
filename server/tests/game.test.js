@@ -551,8 +551,9 @@ describe('Spoiler Scoring', () => {
 
     const result = scoreRound(players5, bids, tricks, scores, books, DEFAULT_GAME_SETTINGS, new Set(), mode5, lookup5);
 
-    // Spoiler nil failed: no penalty (solo player, no partner to protect nil)
-    assert.equal(result.team3.roundScore, 0);
+    // Spoiler nil failed: no penalty, but 2 failed nil tricks add to score as books
+    assert.equal(result.team3.roundScore, 2);
+    assert.equal(result.team3.books, 2);
   });
 
   it('spoiler overtricks (books) are NOT doubled', () => {

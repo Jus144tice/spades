@@ -671,6 +671,38 @@ body {
   .settings-modal {
     max-width: 95%;
   }
+
+  .sort-option-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sort-option-label {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .suit-order-icon {
+    font-size: 18px;
+  }
+
+  .sort-toggle-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  .preview-card {
+    width: 36px;
+    height: 50px;
+  }
+
+  .preview-rank {
+    font-size: 12px;
+  }
+
+  .preview-suit {
+    font-size: 13px;
+  }
 }
 
 /* ===== Preferences / Setup Styles ===== */
@@ -763,6 +795,95 @@ body {
   font-size: 16px;
 }
 
+/* Card sort customization */
+.sort-custom-section {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sort-option-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sort-option-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.suit-order-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.suit-order-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.suit-order-icon {
+  font-size: 20px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.suit-arrow {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 8px;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.suit-arrow:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.suit-arrow:disabled {
+  opacity: 0.15;
+  cursor: default;
+}
+
+.sort-toggle-group {
+  display: flex;
+  gap: 4px;
+}
+
+.sort-toggle-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.sort-toggle-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.sort-toggle-btn.selected {
+  background: rgba(79, 195, 247, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* Color swatches */
 .color-swatches {
   display: flex;
@@ -851,6 +972,13 @@ body {
 .settings-actions .btn {
   display: inline-block;
   margin: 0;
+}
+
+.settings-error {
+  color: var(--danger);
+  font-size: 13px;
+  text-align: center;
+  margin-top: 8px;
 }
 
 /* Rules modal */
@@ -1098,6 +1226,10 @@ body {
 .leaderboard-btn:hover {
   background: #2e4459;
   transform: scale(1.05);
+}
+
+.leaderboard-btn.chat-shifted {
+  right: 336px;
 }
 
 .leaderboard-modal {

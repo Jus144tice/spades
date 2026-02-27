@@ -393,11 +393,11 @@
   50% { box-shadow: 0 0 24px rgba(79, 195, 247, 0.5), inset 0 0 12px rgba(79, 195, 247, 0.08); }
 }
 
-/* AFK badge */
+/* AFK badge — positioned top-left to avoid overlapping team badge (top-right) */
 .afk-badge {
   position: absolute;
   top: -6px;
-  right: -6px;
+  left: -6px;
   background: #ff5722;
   color: #fff;
   font-size: 9px;

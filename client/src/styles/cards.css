@@ -191,6 +191,12 @@
   letter-spacing: 1px;
 }
 
+.card-mega-banner-bottom {
+  top: auto;
+  bottom: 0;
+  border-radius: 0 0 var(--card-radius) var(--card-radius);
+}
+
 /* Hand */
 .hand {
   display: flex;

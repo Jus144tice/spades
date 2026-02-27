@@ -3,6 +3,19 @@ import { useAuth, getCsrfToken } from './AuthContext.jsx';
 
 export const PreferencesContext = createContext(null);
 
+const GUEST_PREFS_KEY = 'spades_guest_preferences';
+
+function loadGuestPrefs() {
+  try {
+    const stored = localStorage.getItem(GUEST_PREFS_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch { return null; }
+}
+
+function saveGuestPrefs(prefs) {
+  try { localStorage.setItem(GUEST_PREFS_KEY, JSON.stringify(prefs)); } catch {}
+}
+
 export function PreferencesProvider({ children }) {
   const { user } = useAuth();
   const [preferences, setPreferences] = useState(null);
@@ -17,22 +30,31 @@ export function PreferencesProvider({ children }) {
       return;
     }
 
-    // Use preferences from the /auth/me response
-    if (user.preferences) {
+    if (user.isGuest) {
+      // Load guest preferences from localStorage
+      const guestPrefs = loadGuestPrefs();
+      if (guestPrefs) {
+        setPreferences(guestPrefs);
+        applyTableColor(guestPrefs.tableColor);
+        setSetupDone(true);
+      }
+    } else if (user.preferences) {
+      // Use preferences from the /auth/me response
       setPreferences(user.preferences);
       applyTableColor(user.preferences.tableColor);
     }
-    setSetupDone(user.hasCompletedSetup ?? false);
+    setSetupDone(prev => user.isGuest ? (loadGuestPrefs() ? true : prev) : (user.hasCompletedSetup ?? false));
     setLoading(false);
   }, [user]);
 
   const updatePreferences = useCallback(async (newPrefs) => {
-    // Guests: update local state only (no DB persistence)
+    // Guests: update local state + localStorage
     if (user?.isGuest) {
       const merged = { ...(preferences || {}), ...newPrefs };
       setPreferences(merged);
       setSetupDone(true);
       applyTableColor(merged.tableColor);
+      saveGuestPrefs(merged);
       return merged;
     }
     try {

@@ -68,8 +68,16 @@ export class GameState {
 
   sortHand(hand, prefs) {
     const cardSort = prefs?.cardSort || DEFAULTS.cardSort;
-    const { suitOrder, rankDirection } = parseCardSort(cardSort);
+    const { suitOrder, rankDirection, primarySort } = parseCardSort(cardSort);
     const rankMul = rankDirection === 'desc' ? -1 : 1;
+    if (primarySort === 'rank') {
+      // Sort by rank first, then suit as secondary
+      return hand.sort((a, b) => {
+        const rankDiff = rankMul * (getCardValue(a) - getCardValue(b));
+        if (rankDiff !== 0) return rankDiff;
+        return suitOrder[a.suit] - suitOrder[b.suit];
+      });
+    }
     return hand.sort((a, b) => {
       if (suitOrder[a.suit] !== suitOrder[b.suit]) {
         return suitOrder[a.suit] - suitOrder[b.suit];

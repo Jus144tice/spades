@@ -929,9 +929,9 @@ describe('Scoring - Edge Cases', () => {
 
     // Team 1: both nil, both failed
     // p1: -100, p3: -100
-    // No non-nil bids, but failed nil tricks become books (combinedBid === 0, failedNilTricks > 0)
-    // Total: -200, books = 3 (1 + 2)
-    assert.equal(result.team1.roundScore, -200);
+    // No non-nil bids, failed nil tricks become books AND add to score ones digit
+    // Total: -200 + 3 = -197, books = 3 (1 + 2)
+    assert.equal(result.team1.roundScore, -197);
     assert.equal(result.team1.books, 3);
   });
 
