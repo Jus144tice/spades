@@ -120,14 +120,26 @@ export function botBid(hand, partnerBid, opponentBids, gameState, botId) {
 
   let bid = Math.round(tricks);
 
+  // --- LAST BIDDER TONE-SETTING ---
+  // When we know ALL other bids, adjust to set the round's tone (set vs duck)
+  const allBidsKnown = (partnerBid !== undefined && partnerBid !== null)
+    && opponentBids.length > 0
+    && opponentBids.every(b => b !== undefined && b !== null);
+
+  if (allBidsKnown && !desp.desperate) {
+    bid = lastBidderAdjust(bid, tricks, hand, sortedSpades, spades, suits, partnerBid, opponentBids, desp);
+    if (bid === 0) return 0; // nil stretch — final
+  }
+
   // If partner bid nil, we need to cover
   if (partnerBid === 0) {
     bid = Math.max(bid, 3);
     bid = Math.min(13, bid + 1);
   }
 
-  // Trim if combined team bid is too aggressive (skip in desperation — we WANT aggressive)
-  if (!desp.desperate && partnerBid !== undefined && partnerBid !== null && partnerBid > 0) {
+  // Trim if combined team bid is too aggressive
+  // Skip in desperation (we WANT aggressive) and when last bidder (tone already set)
+  if (!desp.desperate && !allBidsKnown && partnerBid !== undefined && partnerBid !== null && partnerBid > 0) {
     const combinedBid = bid + partnerBid;
     if (combinedBid > 10) {
       bid = Math.max(1, bid - 1);
@@ -369,6 +381,60 @@ function goForItAdjust(bid, rawTricks, hand, sortedSpades, spades, suits, partne
   }
 
   return bid;
+}
+
+// --- LAST BIDDER TONE-SETTING ---
+// When the bot is the absolute last to bid, it knows ALL other bids and can
+// calculate the exact free-trick count. Adjust bid to set the round's tone:
+// strong hand → fewer free tricks (set tone), weak → more free (duck/safe).
+// Key constraint: stay realistic — never stretch beyond what the hand supports.
+
+function lastBidderAdjust(bid, rawTricks, hand, sortedSpades, spades, suits, partnerBid, opponentBids, desp) {
+  const partnerBidVal = (partnerBid > 0) ? partnerBid : 0;
+  const oppBidTotal = opponentBids.reduce((sum, b) => sum + (b || 0), 0);
+  const tricksLeft = desp.tricksPerRound - partnerBidVal - oppBidTotal;
+
+  // Hand strength classification
+  const midHighCards = hand.filter(c => RANK_VALUE[c.rank] >= 10).length;
+
+  let targetFree;
+  if (rawTricks >= 5 || midHighCards >= 6) {
+    targetFree = 2;  // Strong: set tone
+  } else if (rawTricks >= 3 || midHighCards >= 4) {
+    targetFree = 3;  // Normal: balanced
+  } else {
+    targetFree = 4;  // Weak: duck/safe
+  }
+
+  // Tighten if close to book penalty threshold — fewer free = fewer surprise books
+  const booksToThreshold = (desp.bookThreshold || 10) - (desp.ourBooks || 0);
+  if (booksToThreshold <= 5) {
+    targetFree = Math.max(1, targetFree - 1);
+  }
+
+  // Bid flexibility range — grounded in actual hand strength
+  const bidFloor = Math.max(1, Math.floor(rawTricks - 0.3));
+  const bidCeiling = Math.min(13, Math.ceil(rawTricks + 0.5));
+
+  // Desired bid to hit target free tricks
+  const desiredBid = tricksLeft - targetFree;
+  let adjusted = Math.max(bidFloor, Math.min(bidCeiling, desiredBid));
+
+  // Conservative deviation: ±1 by default, ±2 only if hand strongly supports it
+  const maxDeviation = Math.abs(rawTricks - adjusted) <= 0.5 ? 2 : 1;
+  adjusted = Math.max(bid - maxDeviation, Math.min(bid + maxDeviation, adjusted));
+  adjusted = Math.max(1, adjusted);
+
+  // Nil stretch — only if hand truly supports nil play
+  const adjustedFree = tricksLeft - adjusted;
+  if (adjusted <= 2 && adjustedFree <= 1 && partnerBidVal >= 3 && rawTricks < 1.5) {
+    if (canStretchToNil(hand, sortedSpades, spades, suits)) {
+      return 0;
+    }
+    // Can't make nil — just bid 1, don't force it
+  }
+
+  return adjusted;
 }
 
 // Check if a hand that evaluated as bid=1 can plausibly stretch to nil.

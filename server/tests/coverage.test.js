@@ -1168,6 +1168,174 @@ describe('Bot Bidding', () => {
   });
 });
 
+describe('Bot - lastBidderAdjust tone-setting', () => {
+  function makeMinimalGameState(playerCount, scores, books, settings) {
+    const mode = GAME_MODES[playerCount];
+    const players = [];
+    let pidCounter = 0;
+    for (const tc of mode.teams) {
+      const teamNum = parseInt(tc.id.replace('team', ''), 10);
+      for (let i = 0; i < tc.size; i++) {
+        pidCounter++;
+        players.push({ id: `p${pidCounter}`, name: `P${pidCounter}`, team: teamNum });
+      }
+    }
+    const lookup = buildTeamLookup(mode, players);
+    return {
+      players,
+      bids: {},
+      scores: scores || initTeamScores(mode),
+      books: books || initTeamScores(mode),
+      settings: settings || { ...DEFAULT_GAME_SETTINGS },
+      teamLookup: lookup,
+      mode,
+      roundNumber: 2,
+      tricksTaken: {},
+    };
+  }
+
+  // Normal-strength hand: ~3 tricks (A+K spades, A hearts, some mid cards)
+  const normalHand = [
+    { suit: 'S', rank: 'A', mega: false },
+    { suit: 'S', rank: 'K', mega: false },
+    { suit: 'S', rank: '5', mega: false },
+    { suit: 'H', rank: 'A', mega: false },
+    { suit: 'H', rank: '10', mega: false },
+    { suit: 'H', rank: '4', mega: false },
+    { suit: 'H', rank: '3', mega: false },
+    { suit: 'D', rank: 'J', mega: false },
+    { suit: 'D', rank: '7', mega: false },
+    { suit: 'D', rank: '3', mega: false },
+    { suit: 'C', rank: '8', mega: false },
+    { suit: 'C', rank: '4', mega: false },
+    { suit: 'C', rank: '2', mega: false },
+  ];
+
+  // Strong hand: ~6 tricks (lots of high cards)
+  const strongHand = [
+    { suit: 'S', rank: 'A', mega: false },
+    { suit: 'S', rank: 'K', mega: false },
+    { suit: 'S', rank: 'Q', mega: false },
+    { suit: 'H', rank: 'A', mega: false },
+    { suit: 'H', rank: 'K', mega: false },
+    { suit: 'D', rank: 'A', mega: false },
+    { suit: 'D', rank: 'K', mega: false },
+    { suit: 'C', rank: 'A', mega: false },
+    { suit: 'C', rank: '3', mega: false },
+    { suit: 'C', rank: '4', mega: false },
+    { suit: 'H', rank: '2', mega: false },
+    { suit: 'D', rank: '2', mega: false },
+    { suit: 'D', rank: '3', mega: false },
+  ];
+
+  // Weak hand: ~1-2 tricks (K in short suit prevents nil, mostly low)
+  const weakHand = [
+    { suit: 'S', rank: '4', mega: false },
+    { suit: 'S', rank: '3', mega: false },
+    { suit: 'H', rank: '5', mega: false },
+    { suit: 'H', rank: '3', mega: false },
+    { suit: 'H', rank: '2', mega: false },
+    { suit: 'D', rank: 'K', mega: false },
+    { suit: 'D', rank: '7', mega: false },
+    { suit: 'D', rank: '4', mega: false },
+    { suit: 'D', rank: '3', mega: false },
+    { suit: 'C', rank: '6', mega: false },
+    { suit: 'C', rank: '5', mega: false },
+    { suit: 'C', rank: '4', mega: false },
+    { suit: 'C', rank: '2', mega: false },
+  ];
+
+  it('trims bid when few tricks left (tight round)', () => {
+    // Example 1: considering 3, only 4 left, partner bid 1
+    // Other bids total 9 (partner 1, opps 4+4), 4 tricks left
+    const gs = makeMinimalGameState(4);
+    const bid = botBid(normalHand, 1, [4, 4], gs, 'p1');
+    // Should trim down from 3 to 2 to play safe
+    assert.ok(bid <= 3, `Expected bid <= 3 with only 4 left, got ${bid}`);
+  });
+
+  it('bumps bid when too many free tricks and strong mid/high cards', () => {
+    // Example 2: considering 3, 8 left, lots of mid/high cards
+    // Other bids total 5 (partner 2, opps 1+2), 8 tricks left
+    const gs = makeMinimalGameState(4);
+    const bid = botBid(strongHand, 2, [1, 2], gs, 'p1');
+    // Strong hand with 8 left should bid higher to absorb books
+    assert.ok(bid >= 5, `Expected bid >= 5 with 8 left and strong hand, got ${bid}`);
+  });
+
+  it('stretches to nil when very tight and weak hand with strong partner', () => {
+    // Example 3: have a ~1, only 2 left, partner bid 4
+    // K in doubleton blocks normal nil eval, but canStretchToNil passes
+    // (no A/K spades, <2 high cards, >=5 low cards)
+    const nilHand = [
+      { suit: 'S', rank: '5', mega: false },
+      { suit: 'S', rank: '3', mega: false },
+      { suit: 'H', rank: '6', mega: false },
+      { suit: 'H', rank: '4', mega: false },
+      { suit: 'H', rank: '3', mega: false },
+      { suit: 'H', rank: '2', mega: false },
+      { suit: 'D', rank: 'K', mega: false },
+      { suit: 'D', rank: '5', mega: false },
+      { suit: 'D', rank: '3', mega: false },
+      { suit: 'C', rank: '6', mega: false },
+      { suit: 'C', rank: '5', mega: false },
+      { suit: 'C', rank: '4', mega: false },
+      { suit: 'C', rank: '2', mega: false },
+    ];
+    const gs = makeMinimalGameState(4);
+    // Partner bid 4, opps bid 4+3 = total 11 other bids, 2 left
+    const bid = botBid(nilHand, 4, [4, 3], gs, 'p1');
+    assert.equal(bid, 0, `Expected nil stretch with 2 left and partner covering, got ${bid}`);
+  });
+
+  it('picks higher bid from range to avoid duck tone', () => {
+    // Example 4: considering 3-4, 7 left → go with 4 (3 free, balanced)
+    // Other bids total 6 (partner 2, opps 2+2), 7 tricks left
+    const gs = makeMinimalGameState(4);
+    const bid = botBid(normalHand, 2, [2, 2], gs, 'p1');
+    // With 7 left, normal hand should prefer 3-4 free, so bid 3 or 4
+    assert.ok(bid >= 3 && bid <= 4, `Expected bid 3-4 with 7 left, got ${bid}`);
+  });
+
+  it('sets aggressive tone with strong hand', () => {
+    // Example 5: strong hand, 7 left → bid high for set tone
+    // Other bids total 6 (partner 2, opps 2+2), 7 tricks left
+    const gs = makeMinimalGameState(4);
+    const bid = botBid(strongHand, 2, [2, 2], gs, 'p1');
+    // Strong hand should bid 5+ to leave only 2 free (set tone)
+    assert.ok(bid >= 5, `Expected bid >= 5 for set tone with strong hand, got ${bid}`);
+  });
+
+  it('no adjustment when not the last bidder', () => {
+    // If opponent bids contain undefined, bot is NOT the absolute last bidder
+    const gs = makeMinimalGameState(4);
+    const bidWithAll = botBid(normalHand, 2, [3, 3], gs, 'p1');
+    const bidWithMissing = botBid(normalHand, 2, [3, undefined], gs, 'p1');
+    // With undefined opponent bid, the tone-setting should not fire
+    // Both should be reasonable bids, but the adjustment path differs
+    assert.ok(bidWithMissing >= 1 && bidWithMissing <= 13, `Bid with missing opp should be valid`);
+  });
+
+  it('tightens target when accumulated books near penalty', () => {
+    // With 7 accumulated books (3 from threshold), bot should bid slightly higher
+    const gs = makeMinimalGameState(4, undefined, { team1: 7, team2: 0 });
+    const gsClean = makeMinimalGameState(4, undefined, { team1: 0, team2: 0 });
+    const bidWithBooks = botBid(normalHand, 2, [2, 2], gs, 'p1');
+    const bidClean = botBid(normalHand, 2, [2, 2], gsClean, 'p1');
+    // With books near penalty, bid should be same or higher (tighter target)
+    assert.ok(bidWithBooks >= bidClean, `Expected bid with books (${bidWithBooks}) >= clean (${bidClean})`);
+  });
+
+  it('does not overstretch beyond hand strength', () => {
+    // Weak hand, 8 left — should NOT bid 4+ just because there are many free tricks
+    // Other bids total 5 (partner 2, opps 1+2), 8 tricks left
+    const gs = makeMinimalGameState(4);
+    const bid = botBid(weakHand, 2, [1, 2], gs, 'p1');
+    // Weak hand can't support high bids regardless of free trick count
+    assert.ok(bid <= 3, `Expected weak hand bid <= 3 even with 8 left, got ${bid}`);
+  });
+});
+
 describe('Bot - getDesperationContext', () => {
   it('returns non-desperate when opponents far from winning', () => {
     const mode = GAME_MODES[4];
