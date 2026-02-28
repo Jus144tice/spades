@@ -1001,7 +1001,11 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
     if (!partnerIsSafe) {
       return discardWhenPartnerNil(hand, spades, nonSpade, currentTrick, ledSuit, currentWinner, ctx);
     }
-    // Partner is safe — fall through to normal play (bot may need tricks, set mode, etc.)
+    // Partner is safe this trick — conserve trumps for future nil protection.
+    // Trumps are the primary tool for saving partner's nil; don't waste them
+    // on unnecessary tricks (set mode, disposition, etc.)
+    if (nonSpade.length > 0) return dumpCard(nonSpade, hand, ctx);
+    return pickLowest(hand); // only spades — shed lowest to preserve higher trumps
   }
 
   // Desperation book-dump: NEVER trump — let opponents take the trick
