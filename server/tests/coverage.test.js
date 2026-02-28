@@ -2282,4 +2282,120 @@ describe('Team-first duck/set when team bid is met', () => {
   });
 });
 
+describe('Bot - burn high lead low (last to play with spare masters)', () => {
+  function makeTeamBidState2({ botBid, botTricks, partnerBid, partnerTricks, oppBid, oppTricks, botHand, currentTrick = [], spadesBroken = true, cardsPlayed = [] }) {
+    const mode = GAME_MODES[4];
+    const players = [
+      { id: 'bot', team: 1, seatIndex: 0 },
+      { id: 'opp1', team: 2, seatIndex: 1 },
+      { id: 'partner', team: 1, seatIndex: 2 },
+      { id: 'opp2', team: 2, seatIndex: 3 },
+    ];
+    const lookup = buildTeamLookup(mode, players);
+    const opp1Bid = Math.ceil(oppBid / 2);
+    const opp2Bid = oppBid - opp1Bid;
+    const opp1Tricks = Math.ceil(oppTricks / 2);
+    const opp2Tricks = oppTricks - opp1Tricks;
+    return {
+      currentTrick,
+      bids: { bot: botBid, partner: partnerBid, opp1: opp1Bid, opp2: opp2Bid },
+      tricksTaken: { bot: botTricks, partner: partnerTricks, opp1: opp1Tricks, opp2: opp2Tricks },
+      players,
+      spadesBroken,
+      teamLookup: lookup,
+      mode,
+      cardsPlayed,
+      scores: { team1: 100, team2: 100 },
+      books: { team1: 0, team2: 0 },
+      settings: { ...DEFAULT_GAME_SETTINGS },
+    };
+  }
+
+  it('trumps with highest spade when last to play and has spare masters', () => {
+    // Bot bid 3, took 2 (needs 1 more). Has AS and 3S — both beat the trick.
+    // AS is a master, 3S is low. mastersToSpare > 0 (2 masters, needs 1).
+    // Bot is last to play (3 cards in trick). Led suit is hearts, bot is void.
+    // Should play AS (burn high), not 3S (save low for future duck).
+    const hand = [
+      { suit: 'S', rank: 'A', mega: false },
+      { suit: 'S', rank: '3', mega: false },
+    ];
+    const currentTrick = [
+      { playerId: 'opp1', card: { suit: 'H', rank: 'J', mega: false } },
+      { playerId: 'partner', card: { suit: 'H', rank: '5', mega: false } },
+      { playerId: 'opp2', card: { suit: 'H', rank: 'Q', mega: false } },
+    ];
+    const gs = makeTeamBidState2({
+      botBid: 3, botTricks: 2, partnerBid: 3, partnerTricks: 3,
+      oppBid: 4, oppTricks: 4, botHand: hand, currentTrick,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    assert.equal(card.suit, 'S', 'Should trump');
+    assert.equal(card.rank, 'A', `Should burn highest trump (AS), not save it (played ${card.rank}S)`);
+  });
+
+  it('plays lowest trump when NOT last to play (normal behavior)', () => {
+    // Bot plays second (1 card in trick). Needs 2 more tricks — no duck mode.
+    // Should play 3S (lowest beater), not burn AS.
+    const hand = [
+      { suit: 'S', rank: 'A', mega: false },
+      { suit: 'S', rank: '3', mega: false },
+      { suit: 'D', rank: '4', mega: false },
+    ];
+    const currentTrick = [
+      { playerId: 'opp1', card: { suit: 'H', rank: 'J', mega: false } },
+    ];
+    const gs = makeTeamBidState2({
+      botBid: 4, botTricks: 2, partnerBid: 3, partnerTricks: 2,
+      oppBid: 4, oppTricks: 3, botHand: hand, currentTrick,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    assert.equal(card.suit, 'S', 'Should trump');
+    assert.equal(card.rank, '3', `Should play lowest trump when not last (played ${card.rank}S)`);
+  });
+
+  it('plays lowest trump when last but no spare masters', () => {
+    // Bot bid 3, took 0 (needs 3). Has AS and 3S. mastersToSpare = 0.
+    // Even though last to play, no spare masters — play lowest.
+    const hand = [
+      { suit: 'S', rank: 'A', mega: false },
+      { suit: 'S', rank: '3', mega: false },
+    ];
+    const currentTrick = [
+      { playerId: 'opp1', card: { suit: 'H', rank: 'J', mega: false } },
+      { playerId: 'partner', card: { suit: 'H', rank: '5', mega: false } },
+      { playerId: 'opp2', card: { suit: 'H', rank: 'Q', mega: false } },
+    ];
+    const gs = makeTeamBidState2({
+      botBid: 3, botTricks: 0, partnerBid: 3, partnerTricks: 0,
+      oppBid: 4, oppTricks: 4, botHand: hand, currentTrick,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    assert.equal(card.suit, 'S', 'Should trump');
+    assert.equal(card.rank, '3', `Should play lowest trump when no spare masters (played ${card.rank}S)`);
+  });
+
+  it('follows suit with highest when last, forced to win, spare masters', () => {
+    // Bot bid 3, took 2 (needs 1). Hand: AH, KH (both beat Q). Last to play.
+    // Both cards beat — forced to win. Has spare masters. Burn AH, keep KH...
+    // Actually both are beaters so burn highest.
+    const hand = [
+      { suit: 'H', rank: 'A', mega: false },
+      { suit: 'H', rank: 'K', mega: false },
+    ];
+    const currentTrick = [
+      { playerId: 'opp1', card: { suit: 'H', rank: '5', mega: false } },
+      { playerId: 'partner', card: { suit: 'H', rank: '3', mega: false } },
+      { playerId: 'opp2', card: { suit: 'H', rank: 'Q', mega: false } },
+    ];
+    const gs = makeTeamBidState2({
+      botBid: 3, botTricks: 2, partnerBid: 3, partnerTricks: 3,
+      oppBid: 4, oppTricks: 4, botHand: hand, currentTrick,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    assert.equal(card.suit, 'H', 'Should follow suit');
+    assert.equal(card.rank, 'A', `Should burn highest when forced to win with spare masters (played ${card.rank}H)`);
+  });
+});
+
 console.log('Coverage test suites defined. Running...');

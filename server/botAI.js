@@ -927,6 +927,12 @@ function followSuitNormal(cardsOfSuit, ledSuit, winningValue, winnerIsPartner, c
         const safeBeaters = beaters.filter(c => getEffectiveValue(c, ledSuit) >= RANK_VALUE['Q']);
         if (safeBeaters.length > 0 && beaters.length > 1) return pickLowest(safeBeaters);
       }
+      // Last to play, forced to win (all cards beat), spare masters: burn highest
+      // to preserve low cards for future duck opportunities
+      const isLastFollow = ctx.seatPosition >= (ctx.players?.length || 4) - 1;
+      if (isLastFollow && ctx.mastersToSpare > 0 && beaters.length === cardsOfSuit.length && cardsOfSuit.length >= 2) {
+        return pickHighest(beaters);
+      }
       return pickLowest(beaters);
     }
     return signalWithFollow(cardsOfSuit, winningValue, ctx);
@@ -1098,6 +1104,13 @@ function discardNormal(hand, nonSuitCards, ledSuit, winningValue, winnerIsPartne
       const partnerAlsoVoid = ctx.partnerId && isKnownVoid(ctx.partnerId, ledSuit, memory);
       const partnerHasntPlayed = !currentTrick.find(t => t.playerId === ctx.partnerId);
       if (partnerAlsoVoid && partnerHasntPlayed && spades.length >= 2) {
+        const beaten = trumpBeatersHigh(spades, currentTrick);
+        if (beaten) return beaten;
+      }
+      // Last to play with spare masters: burn the highest trump now,
+      // preserve lower cards to try ducking on future tricks
+      const isLastToPlay = ctx.seatPosition >= (ctx.players?.length || 4) - 1;
+      if (isLastToPlay && ctx.mastersToSpare > 0 && spades.length >= 2) {
         const beaten = trumpBeatersHigh(spades, currentTrick);
         if (beaten) return beaten;
       }
