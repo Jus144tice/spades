@@ -102,7 +102,7 @@
 }
 
 .card-back::after {
-  content: '\u2660';
+  content: '\2660';
   position: absolute;
   inset: 0;
   display: flex;
