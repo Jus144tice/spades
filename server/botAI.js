@@ -74,12 +74,15 @@ export function botPlayCard(hand, gameState, botId) {
   // Nil-bust context: track which opponent bid nil and if they're already busted
   ctx.nilOppId = null;
   ctx.nilOppBusted = false;
+  ctx.nilOppPartnerId = null;
   if (opp1IsNil) {
     ctx.nilOppId = opp1Id;
     ctx.nilOppBusted = (tricksTaken[opp1Id] || 0) > 0;
+    ctx.nilOppPartnerId = opp2Id;
   } else if (opp2IsNil) {
     ctx.nilOppId = opp2Id;
     ctx.nilOppBusted = (tricksTaken[opp2Id] || 0) > 0;
+    ctx.nilOppPartnerId = opp1Id;
   }
 
   // Partner nil busted: penalty is locked in, their tricks help us make bid
@@ -249,7 +252,7 @@ function botLead(hand, ctx) {
 
   if (ctx.botIsNil) return leadAsNil(validCards);
   if (ctx.partnerIsNil && !ctx.partnerNilBusted) return leadToProtectNil(validCards, hand, ctx);
-  if ((ctx.opp1IsNil || ctx.opp2IsNil) && !ctx.nilOppBusted) return leadToBustNil(validCards, hand, ctx);
+  if ((ctx.opp1IsNil || ctx.opp2IsNil) && !ctx.nilOppBusted && !shouldAbandonNilBust(ctx)) return leadToBustNil(validCards, hand, ctx);
 
   // Desperation book-dump: lead low cards to force opponents to take tricks
   if (ctx.desperateBookDump) return leadBookDump(validCards, hand, ctx);
@@ -301,6 +304,102 @@ function getNilPartnerSuitInfo(partnerId, memory, rawCardsPlayed) {
     }
   }
   return info;
+}
+
+/**
+ * Build per-suit profile for BOTH the nil opponent and their partner.
+ * Used to identify which suits are vulnerable (problem suits) for the nil.
+ */
+function getNilOppSuitProfile(nilId, nilPartnerId, memory, rawCardsPlayed, playerCount) {
+  const profile = { nil: {}, partner: {} };
+
+  for (const suit of ['S', 'H', 'D', 'C']) {
+    profile.nil[suit] = { highestShown: 0, timesPlayed: 0, isVoid: isKnownVoid(nilId, suit, memory) };
+    profile.partner[suit] = {
+      highestShown: 0, timesPlayed: 0, isVoid: isKnownVoid(nilPartnerId, suit, memory),
+      coveredWell: false, playedBoss: false,
+    };
+  }
+
+  // Reconstruct completed tricks (same pattern as readPartnerSignals)
+  const completedTricks = [];
+  for (let i = 0; i < rawCardsPlayed.length; i += playerCount) {
+    if (i + playerCount - 1 < rawCardsPlayed.length) {
+      completedTricks.push(rawCardsPlayed.slice(i, i + playerCount));
+    }
+  }
+
+  for (const trick of completedTricks) {
+    const ledSuit = trick[0].card.suit;
+    const nilPlay = trick.find(t => t.playerId === nilId);
+    const partnerPlay = trick.find(t => t.playerId === nilPartnerId);
+
+    if (nilPlay) {
+      const s = nilPlay.card.suit;
+      const v = getCardValue(nilPlay.card);
+      profile.nil[s].timesPlayed++;
+      if (v > profile.nil[s].highestShown) profile.nil[s].highestShown = v;
+    }
+
+    if (partnerPlay) {
+      const s = partnerPlay.card.suit;
+      const v = getCardValue(partnerPlay.card);
+      profile.partner[s].timesPlayed++;
+      if (v > profile.partner[s].highestShown) profile.partner[s].highestShown = v;
+
+      // Did partner cover well in this led suit?
+      if (s === ledSuit && v >= RANK_VALUE['K']) {
+        profile.partner[ledSuit].coveredWell = true;
+        profile.partner[ledSuit].playedBoss = true;
+      } else if (s === 'S' && ledSuit !== 'S') {
+        // Partner trumped to cover nil
+        profile.partner[ledSuit].coveredWell = true;
+      }
+    }
+  }
+
+  return profile;
+}
+
+/**
+ * Score each off-suit for nil vulnerability. Higher score = better target.
+ */
+function identifyNilProblemSuits(profile, memory) {
+  const scores = {};
+
+  for (const suit of ['H', 'D', 'C']) {
+    let score = 0;
+    const nilInfo = profile.nil[suit];
+    const partnerInfo = profile.partner[suit];
+
+    // Partner can't cover this suit at all
+    if (partnerInfo.isVoid) {
+      score += 40;
+    } else if (partnerInfo.timesPlayed > 0 && !partnerInfo.coveredWell) {
+      // Partner played but couldn't cover — lacks high cards
+      score += 20;
+    } else if (partnerInfo.playedBoss) {
+      // Partner covered with boss cards — suit is safe for nil
+      score -= 30;
+    }
+
+    // Nil played high — their low cards are running out
+    if (nilInfo.highestShown >= RANK_VALUE['8']) score += 15;
+    if (nilInfo.highestShown >= RANK_VALUE['J']) score += 10;
+
+    // Nil is void — can't be forced in this suit
+    if (nilInfo.isVoid) score -= 50;
+
+    // Squeeze potential: fewer remaining cards = tighter range
+    const remaining = memory.suitRemaining[suit] || 0;
+    if (remaining <= 3) score += 10;
+    if (remaining <= 2) score += 10;
+
+    scores[suit] = score;
+  }
+
+  scores['S'] = -100; // Never target spades directly — used for trump drain
+  return scores;
 }
 
 function leadToProtectNil(validCards, hand, ctx) {
@@ -451,25 +550,119 @@ function leadToProtectNil(validCards, hand, ctx) {
   return pickHighest(spades);
 }
 
+/**
+ * Check if continuing to bust nil will harm our own bid.
+ * Returns true if we should stop and play normally.
+ */
+function shouldAbandonNilBust(ctx) {
+  // Desperation: always try to set nil regardless
+  if (ctx.desperateSet) return false;
+
+  // Our bid is tight — can't afford to divert resources to nil-bust
+  if (ctx.needMore && ctx.botStillNeeds > 0) {
+    const buffer = ctx.tricksRemaining - ctx.botStillNeeds;
+    if (buffer <= 1) return true;
+  }
+
+  // Book danger: taking more tricks (to force nil) risks book penalty
+  const inRoundBooks = Math.max(0, ctx.teamTricks - ctx.teamBid);
+  if (inRoundBooks >= 2 && ctx.booksBudget <= 4) return true;
+
+  return false;
+}
+
 function leadToBustNil(validCards, hand, ctx) {
   const memory = ctx.memory;
   const nilId = ctx.nilOppId;
+  const nilPartnerId = ctx.nilOppPartnerId;
+  const playerCount = ctx.players ? ctx.players.length : 4;
   const offSuit = validCards.filter(c => c.suit !== 'S');
+  const spades = validCards.filter(c => c.suit === 'S');
 
   if (offSuit.length === 0) return pickLowest(validCards);
+
+  // Build intelligence on nil and partner play patterns
+  const profile = getNilOppSuitProfile(nilId, nilPartnerId, memory, ctx.rawCardsPlayed || [], playerCount);
+  const problemScores = identifyNilProblemSuits(profile, memory);
+
+  // Determine round phase: early (probing) vs late (targeting)
+  const isEarlyRound = (memory.cardsPlayedCount || 0) < playerCount * 4;
 
   // Prefer suits the nil player must follow (not void in)
   const nilFollows = offSuit.filter(c => !isKnownVoid(nilId, c.suit, memory));
   const pool = nilFollows.length > 0 ? nilFollows : offSuit;
 
-  // Mid cards (7-J) are the trap range — too high for nil to duck easily,
-  // too low for nil's partner to safely cover
+  // === TRUMP DRAIN (late round) ===
+  // If nil's partner has been covering by trumping off-suits and still has spades,
+  // lead spades to drain their trump protection
+  if (!isEarlyRound && spades.length > 0) {
+    const partnerUsedTrumps = ['H', 'D', 'C'].some(s =>
+      profile.partner[s].isVoid && profile.partner[s].coveredWell
+    );
+    const partnerHasSpades = nilPartnerId && !isKnownVoid(nilPartnerId, 'S', memory);
+    if (partnerUsedTrumps && partnerHasSpades) {
+      return pickHighest(spades);
+    }
+  }
+
+  // === TARGET PROBLEM SUITS (late round) ===
+  if (!isEarlyRound) {
+    const problemSuits = Object.entries(problemScores)
+      .filter(([suit, score]) => score >= 15 && suit !== 'S')
+      .sort((a, b) => b[1] - a[1]);
+
+    for (const [suit] of problemSuits) {
+      const suitCards = pool.filter(c => c.suit === suit);
+      if (suitCards.length === 0) continue;
+
+      const midCards = suitCards.filter(c => {
+        const v = RANK_VALUE[c.rank];
+        return v >= 7 && v <= 11;
+      });
+      if (midCards.length > 0) return pickHighest(midCards);
+
+      const lowCards = suitCards.filter(c => RANK_VALUE[c.rank] <= 6);
+      if (lowCards.length > 0) return pickHighest(lowCards);
+
+      return pickLowest(suitCards);
+    }
+  }
+
+  // === PROBE (early round) ===
+  // Lead mid-cards in unprobed suits to scout nil/partner responses
+  if (isEarlyRound) {
+    const unprobed = pool.filter(c =>
+      profile.nil[c.suit].timesPlayed === 0 &&
+      profile.partner[c.suit].timesPlayed === 0
+    );
+    const probePool = unprobed.length > 0 ? unprobed : pool;
+
+    const midCards = probePool.filter(c => {
+      const v = RANK_VALUE[c.rank];
+      return v >= 7 && v <= 11;
+    });
+    if (midCards.length > 0) {
+      const groups = groupBySuit(midCards);
+      let bestSuit = null;
+      let bestRemaining = Infinity;
+      for (const [suit, cards] of Object.entries(groups)) {
+        const remaining = memory.suitRemaining[suit] || 13;
+        if (remaining < bestRemaining) {
+          bestRemaining = remaining;
+          bestSuit = suit;
+        }
+      }
+      if (bestSuit) return pickHighest(groups[bestSuit]);
+      return pickHighest(midCards);
+    }
+  }
+
+  // === FALLBACK: mid-card trap in tightest suit ===
   const midCards = pool.filter(c => {
     const v = RANK_VALUE[c.rank];
     return v >= 7 && v <= 11;
   });
   if (midCards.length > 0) {
-    // Prefer suits with fewer remaining cards (tighter squeeze on nil)
     const groups = groupBySuit(midCards);
     let bestSuit = null;
     let bestRemaining = Infinity;
@@ -484,11 +677,9 @@ function leadToBustNil(validCards, hand, ctx) {
     return pickHighest(midCards);
   }
 
-  // No mid cards — lead highest low card from nil-follow suits (maximum pressure)
   const lowCards = pool.filter(c => RANK_VALUE[c.rank] <= 6);
   if (lowCards.length > 0) return pickHighest(lowCards);
 
-  // Only high cards left — lead lowest high to save bigger cards
   return pickLowest(pool);
 }
 
@@ -755,7 +946,7 @@ function botFollow(hand, currentTrick, ctx) {
     if (nilCard) return nilCard;
   }
 
-  if ((ctx.opp1IsNil || ctx.opp2IsNil) && !ctx.nilOppBusted) {
+  if ((ctx.opp1IsNil || ctx.opp2IsNil) && !ctx.nilOppBusted && !shouldAbandonNilBust(ctx)) {
     const bustCard = followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCards, ledSuit, winningValue, ctx);
     if (bustCard) return bustCard;
   }
@@ -820,26 +1011,36 @@ function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCar
   if (!nilId) return null;
 
   const memory = ctx.memory;
+  const nilPartnerId = ctx.nilOppPartnerId;
   const nilPlayerPlayed = currentTrick.find(t => t.playerId === nilId);
 
   if (nilPlayerPlayed) {
     const nilIsWinning = getCurrentWinner(currentTrick).playerId === nilId;
+
     if (nilIsWinning) {
       // Nil is winning — duck under them so they take the trick!
       if (hasLedSuit) {
         const nilValue = getEffectiveValue(nilPlayerPlayed.card, ledSuit);
         const underCards = cardsOfSuit.filter(c => getEffectiveValue(c, ledSuit) < nilValue);
-        if (underCards.length > 0) return pickHighest(underCards); // highest under = shed most
-        // Can't duck — forced to play over. Play lowest to minimize
+        if (underCards.length > 0) return pickHighest(underCards);
         return pickLowest(cardsOfSuit);
       }
       // Void in led suit — DON'T trump! Let nil keep their winning trick
       const nonSpade = nonSuitCards.filter(c => c.suit !== 'S');
-      if (nonSpade.length > 0) return pickHighest(nonSpade); // shed high off-suit
-      return pickLowest(hand); // only spades — shed lowest
+      if (nonSpade.length > 0) return pickHighest(nonSpade);
+      return pickLowest(hand);
     }
-    // Nil played but isn't winning — they're safe this trick, play normally
-    return null;
+
+    // Nil played but is NOT winning (partner covered them).
+    // Shed highest card to get rid of dangerous cards while nil is safe.
+    if (hasLedSuit) {
+      return pickHighest(cardsOfSuit);
+    }
+    // Void in led suit: shed highest non-spade to dump dangerous cards
+    const nonSpade = nonSuitCards.filter(c => c.suit !== 'S');
+    if (nonSpade.length > 0) return pickHighest(nonSpade);
+    // Only spades: shed lowest to conserve trump for future nil-bust
+    return pickLowest(hand);
   }
 
   // Nil hasn't played yet
@@ -853,11 +1054,21 @@ function followToBustNil(hand, currentTrick, hasLedSuit, cardsOfSuit, nonSuitCar
       if (midCards.length > 0) return pickHighest(midCards);
     }
   } else {
-    // We're void in led suit — if nil is also void, they might be forced to trump
-    // Don't trump ourselves — let nil potentially self-bust
+    // We're void in led suit
     if (isKnownVoid(nilId, ledSuit, memory)) {
+      // Nil also void — they might trump. Don't trump ourselves, let nil self-bust
       const nonSpade = nonSuitCards.filter(c => c.suit !== 'S');
       if (nonSpade.length > 0) return pickHighest(nonSpade);
+    }
+
+    // Strategic trump: if nil must follow (not void) but we're void,
+    // trump HIGH to force nil's partner to over-trump (draining their spades)
+    if (nilPartnerId && !isKnownVoid(nilId, ledSuit, memory)) {
+      const spades = hand.filter(c => c.suit === 'S');
+      const partnerHasSpades = !isKnownVoid(nilPartnerId, 'S', memory);
+      if (spades.length > 0 && partnerHasSpades) {
+        return pickHighest(spades);
+      }
     }
   }
 

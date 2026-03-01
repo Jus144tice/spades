@@ -2398,4 +2398,187 @@ describe('Bot - burn high lead low (last to play with spare masters)', () => {
   });
 });
 
+describe('Bot - nil setting strategy', () => {
+  function makeNilBustState(botHand, opts = {}) {
+    const mode = GAME_MODES[4];
+    const players = [
+      { id: 'bot', team: 1, seatIndex: 0 },
+      { id: 'opp1', team: 2, seatIndex: 1 },  // nil bidder
+      { id: 'partner', team: 1, seatIndex: 2 },
+      { id: 'opp2', team: 2, seatIndex: 3 },  // nil's partner
+    ];
+    const lookup = buildTeamLookup(mode, players);
+    return {
+      currentTrick: opts.currentTrick || [],
+      bids: opts.bids || { bot: 4, partner: 3, opp1: 0, opp2: 6 },
+      tricksTaken: opts.tricksTaken || { bot: 2, partner: 2, opp1: 0, opp2: 2 },
+      players,
+      spadesBroken: opts.spadesBroken ?? true,
+      teamLookup: lookup,
+      mode,
+      cardsPlayed: opts.cardsPlayed || [],
+      scores: opts.scores || { team1: 100, team2: 100 },
+      books: opts.books || { team1: 0, team2: 0 },
+      settings: { ...DEFAULT_GAME_SETTINGS },
+    };
+  }
+
+  it('probes with mid-range cards in early round', () => {
+    const hand = [
+      { suit: 'H', rank: '9', mega: false },
+      { suit: 'D', rank: '3', mega: false },
+      { suit: 'C', rank: '5', mega: false },
+      { suit: 'H', rank: '4', mega: false },
+      { suit: 'D', rank: '6', mega: false },
+    ];
+    const gs = makeNilBustState(hand); // no cardsPlayed = early round
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should prefer mid-range 9H for probing over low cards
+    assert.equal(card.rank, '9', `Should probe with 9 (mid-range), not ${card.rank}`);
+    assert.equal(card.suit, 'H', `Should probe hearts, not ${card.suit}`);
+  });
+
+  it('targets problem suit where nil partner played low', () => {
+    // 4 completed tricks (16 cards) = past early round
+    const cardsPlayed = [
+      // Trick 1: Hearts led — nil partner (opp2) played low, didn't cover
+      { playerId: 'bot', card: { suit: 'H', rank: '10', mega: false } },
+      { playerId: 'opp1', card: { suit: 'H', rank: '3', mega: false } },
+      { playerId: 'partner', card: { suit: 'H', rank: 'J', mega: false } },
+      { playerId: 'opp2', card: { suit: 'H', rank: '5', mega: false } },
+      // Trick 2: Clubs led — nil partner covered with King (safe suit)
+      { playerId: 'partner', card: { suit: 'C', rank: '7', mega: false } },
+      { playerId: 'opp2', card: { suit: 'C', rank: 'K', mega: false } },
+      { playerId: 'bot', card: { suit: 'C', rank: '4', mega: false } },
+      { playerId: 'opp1', card: { suit: 'C', rank: '2', mega: false } },
+      // Trick 3: Diamonds
+      { playerId: 'bot', card: { suit: 'D', rank: 'A', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: '4', mega: false } },
+      { playerId: 'partner', card: { suit: 'D', rank: '6', mega: false } },
+      { playerId: 'opp2', card: { suit: 'D', rank: '8', mega: false } },
+      // Trick 4: Diamonds
+      { playerId: 'partner', card: { suit: 'D', rank: '5', mega: false } },
+      { playerId: 'opp2', card: { suit: 'D', rank: '7', mega: false } },
+      { playerId: 'bot', card: { suit: 'D', rank: 'K', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: '3', mega: false } },
+    ];
+    const hand = [
+      { suit: 'H', rank: '8', mega: false },
+      { suit: 'C', rank: '9', mega: false },
+      { suit: 'D', rank: '2', mega: false },
+    ];
+    const gs = makeNilBustState(hand, {
+      cardsPlayed,
+      tricksTaken: { bot: 3, partner: 1, opp1: 0, opp2: 0 },
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should target Hearts (problem suit — partner played low) over Clubs (boss covered)
+    assert.equal(card.suit, 'H', `Should target problem suit Hearts, not ${card.suit}`);
+  });
+
+  it('sheds highest card when nil played but partner covered', () => {
+    const hand = [
+      { suit: 'H', rank: 'K', mega: false },
+      { suit: 'H', rank: '7', mega: false },
+      { suit: 'H', rank: '3', mega: false },
+    ];
+    // Opp1 (nil) played 4H, opp2 (partner) played AH — nil is covered
+    const currentTrick = [
+      { playerId: 'partner', card: { suit: 'H', rank: '6', mega: false } },
+      { playerId: 'opp1', card: { suit: 'H', rank: '4', mega: false } },
+      { playerId: 'opp2', card: { suit: 'H', rank: 'A', mega: false } },
+    ];
+    const gs = makeNilBustState(hand, { currentTrick });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Nil is covered — shed highest (K) to get rid of dangerous card
+    assert.equal(card.rank, 'K', `Should shed K when nil is covered, not ${card.rank}`);
+  });
+
+  it('ducks under nil when nil is winning the trick', () => {
+    const hand = [
+      { suit: 'D', rank: 'Q', mega: false },
+      { suit: 'D', rank: '5', mega: false },
+      { suit: 'D', rank: '3', mega: false },
+    ];
+    // Opp1 (nil) played 8D and is currently winning
+    const currentTrick = [
+      { playerId: 'partner', card: { suit: 'D', rank: '6', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: '8', mega: false } },
+    ];
+    const gs = makeNilBustState(hand, { currentTrick });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should duck under 8 — play 5 (highest card under 8)
+    assert.equal(card.rank, '5', `Should duck with 5, not ${card.rank}`);
+  });
+
+  it('leads spade to drain nil partner trumps when partner has been trump-covering', () => {
+    // 4 completed tricks showing nil partner trumped in diamonds
+    const cardsPlayed = [
+      // Trick 1: Diamonds led — opp2 trumped (void in diamonds, covered with spade)
+      { playerId: 'bot', card: { suit: 'D', rank: '8', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: '3', mega: false } },
+      { playerId: 'partner', card: { suit: 'D', rank: '7', mega: false } },
+      { playerId: 'opp2', card: { suit: 'S', rank: '5', mega: false } },
+      // Trick 2: Diamonds
+      { playerId: 'bot', card: { suit: 'D', rank: '9', mega: false } },
+      { playerId: 'opp1', card: { suit: 'D', rank: '2', mega: false } },
+      { playerId: 'partner', card: { suit: 'D', rank: '6', mega: false } },
+      { playerId: 'opp2', card: { suit: 'S', rank: '4', mega: false } },
+      // Trick 3: Hearts
+      { playerId: 'partner', card: { suit: 'H', rank: 'J', mega: false } },
+      { playerId: 'opp2', card: { suit: 'H', rank: 'K', mega: false } },
+      { playerId: 'bot', card: { suit: 'H', rank: '5', mega: false } },
+      { playerId: 'opp1', card: { suit: 'H', rank: '4', mega: false } },
+      // Trick 4: Clubs
+      { playerId: 'bot', card: { suit: 'C', rank: 'A', mega: false } },
+      { playerId: 'opp1', card: { suit: 'C', rank: '3', mega: false } },
+      { playerId: 'partner', card: { suit: 'C', rank: '8', mega: false } },
+      { playerId: 'opp2', card: { suit: 'C', rank: '6', mega: false } },
+    ];
+    const hand = [
+      { suit: 'S', rank: 'A', mega: false },
+      { suit: 'S', rank: 'K', mega: false },
+      { suit: 'H', rank: '9', mega: false },
+    ];
+    const gs = makeNilBustState(hand, {
+      cardsPlayed,
+      tricksTaken: { bot: 2, partner: 1, opp1: 0, opp2: 1 },
+      spadesBroken: true,
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Nil partner trumped diamonds (void) but still has spades — drain them
+    assert.equal(card.suit, 'S', `Should lead spade to drain trumps, not ${card.suit}`);
+  });
+
+  it('stops nil-bust when own bid is tight', () => {
+    const hand = [
+      { suit: 'H', rank: 'A', mega: false },
+      { suit: 'D', rank: 'K', mega: false },
+      { suit: 'C', rank: 'Q', mega: false },
+    ];
+    // Bot bid 4, only took 1. Only 4 tricks remaining. Buffer is just 1.
+    const gs = makeNilBustState(hand, {
+      tricksTaken: { bot: 1, partner: 1, opp1: 0, opp2: 7 },
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should play to make bid (lead Ace), not to bust nil with mid-range
+    assert.equal(card.rank, 'A', `Should prioritize own bid with A, not ${card.rank}`);
+  });
+
+  it('plays normally when nil already busted', () => {
+    const hand = [
+      { suit: 'H', rank: '9', mega: false },
+      { suit: 'D', rank: '3', mega: false },
+      { suit: 'C', rank: '5', mega: false },
+    ];
+    // opp1 already has 1 trick — nil is busted
+    const gs = makeNilBustState(hand, {
+      tricksTaken: { bot: 2, partner: 2, opp1: 1, opp2: 3 },
+    });
+    const card = botPlayCard(hand, gs, 'bot');
+    // Should play normally — no nil-bust behavior
+    assert.ok(card, 'Should return a valid card');
+  });
+});
+
 console.log('Coverage test suites defined. Running...');

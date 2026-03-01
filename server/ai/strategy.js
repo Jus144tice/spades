@@ -126,6 +126,15 @@ export function calculateDisposition(hand, ctx) {
     disposition += readPartnerSignals(ctx);
   }
 
+  // Nil partner distraction: opponent's nil means their partner is spending
+  // resources covering, making their non-nil bid vulnerable. Lean SET.
+  if ((ctx.opp1IsNil || ctx.opp2IsNil) && !ctx.nilOppBusted) {
+    const oppStillNeeds = Math.max(0, ctx.oppBid - ctx.oppTricks);
+    if (oppStillNeeds > 0) {
+      disposition += 1.0;
+    }
+  }
+
   return disposition;
 }
 
