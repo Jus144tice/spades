@@ -1,0 +1,75 @@
+name: Deploy
+
+# Fires only after CI succeeds on a push to main. Never runs for pull_request
+# CI, so a fork PR cannot execute anything on the self-hosted box.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Never let two deploys interleave a build with a restart.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: [self-hosted, spades]
+    timeout-minutes: 20
+    env:
+      APP_DIR: /opt/apps/spades
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - name: Verify working tree is clean
+        run: |
+          cd "$APP_DIR"
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Working tree at $APP_DIR has uncommitted changes; refusing to deploy over them."
+            git status --short
+            exit 1
+          fi
+
+      - name: Fast-forward to the commit CI validated
+        run: |
+          cd "$APP_DIR"
+          git fetch origin main --prune
+          git switch main
+          git merge --ff-only "$DEPLOY_SHA"
+          echo "Deploying $(git rev-parse --short HEAD): $(git log -1 --pretty=%s)"
+
+      - name: Install server dependencies
+        run: cd "$APP_DIR" && npm ci
+
+      - name: Install client dependencies
+        run: cd "$APP_DIR/client" && npm ci
+
+      # The step the manual deploy sequence was missing: client/dist is
+      # gitignored, so without this a client change never reaches production.
+      - name: Build client
+        run: cd "$APP_DIR" && npm run build
+
+      - name: Restart server
+        run: pm2 restart spades --update-env
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 15); do
+            code=$(curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ || true)
+            if [ "$code" = "200" ]; then
+              echo "Healthy after ${i}s (HTTP 200)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Server did not return HTTP 200 within 15s (last: ${code:-none})"
+          pm2 logs spades --lines 40 --nostream || true
+          exit 1
