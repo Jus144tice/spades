@@ -10,7 +10,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
-import { doubleCsrf } from 'csrf-csrf';
+import { createCsrf } from './csrf.js';
 import pool, { initDB } from './db/index.js';
 import { log, error } from './logger.js';
 import { registerHandlers } from './socketHandlers.js';
@@ -55,18 +55,9 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // --- CSRF protection (double-submit cookie) ---
-const { generateCsrfToken: generateToken, doubleCsrfProtection } = doubleCsrf({
-  getSecret: () => process.env.SESSION_SECRET,
-  getSessionIdentifier: (req) => req.session?.id || '',
-  cookieName: 'csrf',
-  cookieOptions: {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    signed: true,
-  },
-  getTokenFromRequest: (req) => req.headers['x-csrf-token'],
+const { generateCsrfToken: generateToken, doubleCsrfProtection } = createCsrf({
+  secret: process.env.SESSION_SECRET,
+  secure: process.env.NODE_ENV === 'production',
 });
 app.use(doubleCsrfProtection);
 
