@@ -1,0 +1,12 @@
+site_name: Graham Spades
+site_description: Multiplayer Spades card game — grahamspades.com
+
+# Rendered as TechDocs inside StackSchematic (mkdocs-techdocs-core). These pages describe what
+# Spades is and how it fits together, for the catalog reader; the README stays the full
+# developer setup guide.
+plugins:
+  - techdocs-core
+
+nav:
+  - Overview: index.md
+  - Architecture: architecture.md
